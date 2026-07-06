@@ -1,0 +1,22 @@
+import { z } from "zod";
+import { Request, Response, NextFunction } from "express";
+
+export function validate(schema: z.ZodType) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const result = schema.safeParse(req.body);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Validation failed",
+          details: result.error.flatten(),
+        },
+      });
+    }
+
+    req.body = result.data;
+    next();
+  };
+}
