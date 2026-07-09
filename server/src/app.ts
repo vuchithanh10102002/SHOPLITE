@@ -6,6 +6,7 @@ import { notFound } from "./middlewares/notFound";
 import { validate } from "./middlewares/validate";
 import { z } from "zod";
 import healthRouter from "./routes/health";
+import authRoutes from "./modules/auth/auth.routes";
 
 const app = express();
 
@@ -30,6 +31,8 @@ app.post(
 
     }
 );
+
+app.use("/api/auth", authRoutes);
 
 app.use(notFound);
 

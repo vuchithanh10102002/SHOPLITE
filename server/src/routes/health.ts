@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
-import { redis } from "../lib/redis";
+import { redisConnection } from "../lib/redis";
+
+import { emailQueue } from "../lib/queue";
 
 
 const router = Router();
@@ -17,10 +19,27 @@ router.get("/ready", async (_, res) => {
     await prisma.$queryRaw`SELECT 1`;
 
     // Redis
-    await redis.ping();
+    await redisConnection.ping();
 
     res.json({
       ok: true,
+    });
+  } catch (error) {
+    res.status(503).json({
+      ok: false,
+    });
+  }
+});
+
+router.get("/test", async (_, res) => {
+  try {
+    await emailQueue.add("send-email", {
+      email: "abc@gmail.com",
+      name: "Thanh",
+    });
+
+    res.json({
+      message: "Queue Added",
     });
   } catch (error) {
     res.status(503).json({

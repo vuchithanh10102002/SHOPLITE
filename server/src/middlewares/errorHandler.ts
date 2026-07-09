@@ -8,7 +8,9 @@ export function errorHandler(err: unknown, req:  Request, res: Response, next: N
       error: { code: err.code, message: err.message, details: err.details },
     });
   }
+  
   req.log.error({ err }, 'unhandled error');           // log day du stack
+
   return res.status(500).json({
     success: false,
     error: { code: 'INTERNAL', message: 'Có lỗi xảy ra, vui lòng thử lại' }, // KHONG lo stack

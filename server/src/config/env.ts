@@ -9,9 +9,15 @@ const envSchema = z.object({
   REDIS_URL: z.string().url(),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
+  JWT_ACCESS_EXPIRES_IN: z.string(),
+  JWT_REFRESH_EXPIRES_IN: z.string(),
   CLOUDINARY_URL: z.string(),
   SMTP_URL: z.string(),
   CLIENT_URL: z.string().url(),
   PAYMENT_FAIL_RATE: z.coerce.number().min(0).max(1).default(0.2),
+  SMTP_HOST: z.string(),
+  SMTP_PORT: z.coerce.number(),
+  SMTP_USER: z.string(),
+  SMTP_PASS: z.string(),
 });
 export const env = envSchema.parse(process.env); // throw → process chet → dung y do

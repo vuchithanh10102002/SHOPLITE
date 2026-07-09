@@ -1,14 +1,13 @@
-import { createClient } from "redis";
-import logger from "./logger";
+import Redis from "ioredis";
 
-export const redis = createClient({
-  url: process.env.REDIS_URL,
+export const redisConnection = new Redis(process.env.REDIS_URL!, {
+    maxRetriesPerRequest: null,
 });
 
-redis.on("ready", () => {
-  logger.info("Redis connected");
+redisConnection.on("connect", () => {
+    console.log("✅ Redis connected");
 });
 
-redis.on("error", (err) => {
-  logger.error({ err }, "Redis error");
+redisConnection.on("error", (err) => {
+    console.error("Redis Error:", err);
 });
