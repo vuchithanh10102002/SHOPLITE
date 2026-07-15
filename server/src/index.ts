@@ -1,18 +1,11 @@
 import app from "./app";
+import { bootstrap } from "./bootstrap";
 import { env } from "./config/env";
 import logger from "./lib/logger";
 import { prisma } from "./lib/prisma";
 import { redisConnection } from "./lib/redis";
 
-let server: ReturnType<typeof app.listen>;
-
-async function bootstrap() {
-  server = app.listen(env.PORT, () => {
-    logger.info(`Server running on port ${env.PORT}`);
-  });
-}
-
-bootstrap();
+const server = bootstrap();
 
 async function shutdown(signal: string) {
   logger.info({ signal }, "Shutting down...");
