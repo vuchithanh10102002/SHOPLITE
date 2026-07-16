@@ -2,6 +2,7 @@ import type { Mock } from "vitest";
 import type { Response } from "supertest";
 import { api } from "./request";
 import { emailQueue } from "../../lib/queue";
+import { prisma } from "../../lib/prisma";
 
 export const REFRESH_COOKIE = "refreshToken";
 
@@ -87,6 +88,22 @@ export async function login(email: string, password = DEFAULT_PASSWORD) {
 /** Duong tat: tao user da verify + login, tra ve token va cookie san dung. */
 export async function createLoggedInUser() {
   const { email, password } = await createVerifiedUser();
+  const { accessToken, refreshCookie } = await login(email, password);
+
+  return { email, password, accessToken, refreshCookie: refreshCookie! };
+}
+
+/**
+ * Nhu createLoggedInUser nhung role ADMIN.
+ *
+ * Phai UPDATE role TRUOC khi login: role duoc nhet vao access token luc ky
+ * (auth.service), doi role sau khi login thi token cu van mang role CUSTOMER.
+ */
+export async function createLoggedInAdmin() {
+  const { email, password } = await createVerifiedUser();
+
+  await prisma.user.update({ where: { email }, data: { role: "ADMIN" } });
+
   const { accessToken, refreshCookie } = await login(email, password);
 
   return { email, password, accessToken, refreshCookie: refreshCookie! };

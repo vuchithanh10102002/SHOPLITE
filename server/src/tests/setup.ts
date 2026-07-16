@@ -42,6 +42,14 @@ beforeEach(async () => {
   await prisma.cartItem.deleteMany();
   await prisma.cart.deleteMany();
 
+  // Product/Category: phai xoa SAU orderItem + cartItem (hai bang do tro toi
+  // product), va con truoc cha — image → product → category, category con truoc
+  // category cha (self-relation CategoryTree khong cascade).
+  await prisma.productImage.deleteMany();
+  await prisma.product.deleteMany();
+  await prisma.category.deleteMany({ where: { parentId: { not: null } } });
+  await prisma.category.deleteMany();
+
   await prisma.user.deleteMany();
 
   // Xoa counter rate limit — khong co dong nay, test thu 3 se an 429 vi

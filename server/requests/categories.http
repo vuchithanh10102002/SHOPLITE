@@ -1,0 +1,141 @@
+# ShopLite — Categories (Phase 3, bước 1)
+#
+# Cần extension "REST Client" (humao.rest-client) cho VS Code.
+# Bấm "Send Request" ngay phía trên mỗi block.
+#
+# VÌ SAO dùng file .http thay vì curl/PowerShell trên terminal:
+# file này là UTF-8 nên tiếng Việt đi tới server nguyên vẹn. Gõ thẳng
+# `curl -d '{"name":"Đồ chơi"}'` trong terminal Windows thì shell băm nát
+# UTF-8 TRƯỚC KHI curl kịp gửi → server nhận "�? choi" → slug sai.
+#
+# Chuẩn bị:
+#   docker compose up -d           (ở gốc repo)
+#   npx prisma db seed             (tạo admin@shoplite.dev)
+#   npm run dev                    (trong server/)
+
+@baseUrl = http://localhost:3000
+
+### Login admin → lấy accessToken
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "admin@shoplite.dev", "password": "Webpx@2024" }
+
+###
+@token = {{login.response.body.data.accessToken}}
+
+### Login customer (để test 403)
+# @name loginCustomer
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "cong@webpx.vn", "password": "Webpx@2024" }
+
+###
+@customerToken = {{loginCustomer.response.body.data.accessToken}}
+
+
+# ─────────────────────────────────────────────
+# ĐỌC — public, không cần token
+# ─────────────────────────────────────────────
+
+### Cây category (2 cấp)
+GET {{baseUrl}}/api/categories
+
+
+# ─────────────────────────────────────────────
+# GHI — chỉ ADMIN
+# ─────────────────────────────────────────────
+
+### Tạo category gốc → 201, slug tự sinh "do-choi-tre-em"
+# @name createRoot
+POST {{baseUrl}}/api/categories
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "name": "Đồ chơi trẻ em" }
+
+###
+@rootId = {{createRoot.response.body.data.id}}
+
+### Tạo lại CÙNG TÊN → 201, slug thành "do-choi-tre-em-2"
+POST {{baseUrl}}/api/categories
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "name": "Đồ chơi trẻ em" }
+
+### Tạo category con → 201
+# @name createChild
+POST {{baseUrl}}/api/categories
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "name": "Xe mô hình", "parentId": "{{rootId}}" }
+
+###
+@childId = {{createChild.response.body.data.id}}
+
+### Đổi tên → tên đổi, slug GIỮ NGUYÊN (slug đã nằm trong URL người ta lưu)
+PATCH {{baseUrl}}/api/categories/{{rootId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "name": "Đồ chơi & Mô hình" }
+
+### Xóa (soft delete) → 200
+DELETE {{baseUrl}}/api/categories/{{childId}}
+Authorization: Bearer {{token}}
+
+
+# ─────────────────────────────────────────────
+# CÁC ĐƯỜNG LỖI — phải trả đúng mã
+# ─────────────────────────────────────────────
+
+### Không token → 401 UNAUTHORIZED
+POST {{baseUrl}}/api/categories
+Content-Type: application/json
+
+{ "name": "Áo" }
+
+### Token CUSTOMER → 403 FORBIDDEN
+POST {{baseUrl}}/api/categories
+Content-Type: application/json
+Authorization: Bearer {{customerToken}}
+
+{ "name": "Áo" }
+
+### Tên không có ký tự latin → 400 VALIDATION_ERROR
+POST {{baseUrl}}/api/categories
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "name": "!!!" }
+
+### parentId không tồn tại → 404 NOT_FOUND
+POST {{baseUrl}}/api/categories
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "name": "Áo", "parentId": "00000000-0000-4000-8000-000000000000" }
+
+### Cây quá 2 cấp → 400 MAX_DEPTH_EXCEEDED
+# Chạy sau createChild ở trên: lấy con của con.
+POST {{baseUrl}}/api/categories
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "name": "Xe đua", "parentId": "{{childId}}" }
+
+### id không phải uuid → 400 VALIDATION_ERROR
+PATCH {{baseUrl}}/api/categories/khong-phai-uuid
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "name": "Áo" }
+
+### Xóa category còn sản phẩm → 409 CATEGORY_NOT_EMPTY
+# "nha-bep" từ seed có sản phẩm. Lấy id bằng GET /api/categories rồi thay vào.
+DELETE {{baseUrl}}/api/categories/PASTE_ID_NHA_BEP_VAO_DAY
+Authorization: Bearer {{token}}

@@ -14,9 +14,9 @@
  * Sau khi thêm enum: npx prisma migrate dev --name add-enums && npx prisma generate
  *
  * PACKAGE cần có trong server/package.json (dependencies):
- *   bcryptjs
+ *   bcrypt
  * (dev dependencies):
- *   @types/bcryptjs  @types/node
+ *   @types/bcrypt  @types/node
  *
  * tsconfig.json cần có:
  *   "types": ["node"]   (hoặc bỏ trường types để TS tự tìm)
@@ -48,7 +48,9 @@ function deterministicHash(input: string): string {
 }
 
 // ─── Third-party ───────────────────────────────────────────────────────────────
-import bcrypt from 'bcryptjs';                          // cần @types/bcryptjs
+// `bcrypt` (native), KHONG phai `bcryptjs`: Phase 2 da go bcryptjs di vi trung
+// chuc nang. Hash cua hai package cung dinh dang $2b$ nen doi qua lai vo tu.
+import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 
