@@ -1,11 +1,22 @@
 import { createEmailWorker } from "./workers/email.worker";
+import {
+  createOrderMaintenanceWorker,
+  scheduleStaleOrderSweep,
+} from "./modules/orders/order.maintenance";
 import { prisma } from "./lib/prisma";
 import { redisConnection } from "./lib/redis";
 import logger from "./lib/logger";
 
 const emailWorker = createEmailWorker();
 
-logger.info("Email worker started");
+const orderMaintenanceWorker = createOrderMaintenanceWorker();
+
+// Dang ky lich quet don PENDING treo (idempotent — restart khong tao lich trung).
+void scheduleStaleOrderSweep()
+  .then(() => logger.info("Đã đăng ký lịch quét đơn treo (10 phút/lần)"))
+  .catch((err) => logger.error({ err }, "không đăng ký được lịch quét đơn treo"));
+
+logger.info("Email worker + order-maintenance worker started");
 
 /**
  * Graceful shutdown — quan trong o worker hon ca o API.
@@ -21,6 +32,7 @@ async function shutdown(signal: string) {
 
   try {
     await emailWorker.close();
+    await orderMaintenanceWorker.close();
 
     await prisma.$disconnect();
     await redisConnection.quit();

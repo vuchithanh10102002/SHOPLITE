@@ -1,4 +1,5 @@
 import { Prisma, OrderStatus, PaymentStatus } from "@prisma/client";
+import { subMinutes } from "date-fns";
 import { prisma } from "../../lib/prisma";
 import { Errors } from "../../shared/errors";
 import { PageMeta } from "../../shared/response";
@@ -453,6 +454,49 @@ async function adminListOrders(
   };
 }
 
+/**
+ * SYSTEM: quét đơn PENDING treo quá `thresholdMinutes` → hoàn kho + CANCELLED
+ * (b7). Vá khoảng hở đã biết: process chết giữa tx trừ kho (b4) và settle (b5) →
+ * đơn kẹt PENDING đã trừ kho. Luồng thường settle ĐỒNG BỘ nên PENDING chỉ tồn tại
+ * khi có sự cố → an toàn để coi PENDING-quá-hạn là "hỏng, cần hoàn kho".
+ *
+ * Mỗi đơn MỘT transaction riêng (đơn lỗi không kéo cả mẻ). Conditional
+ * `WHERE status='PENDING'` (count===0 → bỏ qua): nếu đơn vừa được settle sang PAID
+ * ngay trước sweep thì KHÔNG đụng — chống đua với settle. Trả về số đơn đã hủy.
+ */
+async function cancelStalePendingOrders(thresholdMinutes = 15): Promise<number> {
+  const cutoff = subMinutes(new Date(), thresholdMinutes);
+  const stale = await prisma.order.findMany({
+    where: { status: OrderStatus.PENDING, createdAt: { lt: cutoff } },
+    select: { id: true, items: { select: { productId: true, quantity: true } } },
+  });
+
+  let cancelled = 0;
+  for (const order of stale) {
+    await prisma.$transaction(async (tx) => {
+      const { count } = await tx.order.updateMany({
+        where: { id: order.id, status: OrderStatus.PENDING },
+        data: { status: OrderStatus.CANCELLED },
+      });
+      if (count === 0) return; // vua duoc settle/xu ly boi luong khac → khong dung
+
+      await restockItems(tx, order.items);
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          fromStatus: OrderStatus.PENDING,
+          toStatus: OrderStatus.CANCELLED,
+          reason: "Hệ thống: đơn quá hạn xử lý — hoàn kho tự động",
+          changedBy: null, // khong phai user nao — job he thong
+        },
+      });
+      cancelled++;
+    });
+  }
+
+  return cancelled;
+}
+
 export const orderService = {
   createOrder,
   getOrderById,
@@ -460,4 +504,5 @@ export const orderService = {
   cancelOrder,
   adminUpdateStatus,
   adminListOrders,
+  cancelStalePendingOrders,
 };
