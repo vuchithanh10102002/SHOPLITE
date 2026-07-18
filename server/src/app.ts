@@ -11,6 +11,7 @@ import healthRouter from "./routes/health";
 import authRoutes from "./modules/auth/auth.routes";
 import categoryRoutes from "./modules/categories/category.routes";
 import productRoutes from "./modules/products/product.routes";
+import cartRoutes from "./modules/cart/cart.routes";
 import cookieParser from "cookie-parser";
 import swaggerUi from "swagger-ui-express";
 import { openApiDocument } from "./docs/openapi";
@@ -82,6 +83,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/categories", categoryRoutes);
 
 app.use("/api/products", productRoutes);
+
+app.use("/api/cart", cartRoutes);
 
 app.use(notFound);
 

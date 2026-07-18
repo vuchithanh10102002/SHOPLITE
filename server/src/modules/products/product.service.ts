@@ -5,6 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { cloudinary } from "../../lib/cloudinary";
 import { Errors } from "../../shared/errors";
 import { normalizeText } from "../../shared/slugify";
+import { stockStatusOf, StockStatus } from "../../shared/stock";
 import { assertRealImage } from "../../shared/image-magic";
 import { insertWithUniqueSlug } from "../../shared/unique-slug";
 import { PageMeta } from "../../shared/response";
@@ -35,16 +36,9 @@ const productSelect = {
 
 type ProductRow = Prisma.ProductGetPayload<{ select: typeof productSelect }>;
 
-export type StockStatus = "in_stock" | "low" | "out";
-
-/** Nguong "sap het". Chon o day chu khong luu DB — chua co yeu cau cau hinh theo san pham. */
-const LOW_STOCK_THRESHOLD = 5;
-
-function stockStatusOf(stock: number): StockStatus {
-  if (stock <= 0) return "out";
-  if (stock <= LOW_STOCK_THRESHOLD) return "low";
-  return "in_stock";
-}
+// StockStatus + stockStatusOf da tach sang shared/stock.ts (cart cung xai). Re-
+// export de PublicProduct ben duoi va moi cho quen doc StockStatus tu day van chay.
+export type { StockStatus };
 
 // ── Cache: version key (handbook 8.2, roadmap Phase 3 buoc 3) ────────────────
 // MOT bien dem duy nhat cho CA list va detail: moi write chi `incr` no la ca hai
