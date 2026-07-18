@@ -175,6 +175,11 @@ model Order {
   history OrderStatusHistory[]
   payment Payment?
 
+  // Lop chot idempotency (Handbook 6.5 Q2): findUnique truoc transaction KHONG du
+  // — 2 request cung key den cung luc deu thay "chua ton tai". Constraint DB la
+  // chot cuoi; service bat P2002 → tra don da tao. Cung enable where:
+  // { userId_idempotencyKey } cho findUnique.
+  @@unique([userId, idempotencyKey])
   @@index([userId])
   @@map("orders")
 }
