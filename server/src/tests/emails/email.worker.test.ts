@@ -3,6 +3,7 @@ import { UnrecoverableError, type Job } from "bullmq";
 import { prisma } from "../../lib/prisma";
 import { processEmailJob } from "../../workers/email.worker";
 import { sendMail } from "../../lib/mailer";
+import { normalizeText } from "../../shared/slugify";
 import type { EmailJobData } from "../../modules/emails/email.types";
 
 // Mock o tang mailer, KHONG mock nodemailer: test van chay qua template that
@@ -107,6 +108,7 @@ describe("processEmailJob — order-status", () => {
       data: {
         categoryId: category.id,
         name: "Bàn phím cơ",
+        nameNormalized: normalizeText("Bàn phím cơ"),
         slug: `kb-${Date.now()}`,
         price: "1200000",
         stock: 10,

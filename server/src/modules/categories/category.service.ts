@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { Errors } from "../../shared/errors";
-import { slugify } from "../../shared/slugify";
+import { insertWithUniqueSlug } from "../../shared/unique-slug";
 import { CacheResult, cacheDel, remember } from "../../lib/cache";
 import { CreateCategoryInput, UpdateCategoryInput } from "./category.schemas";
 
@@ -31,42 +31,13 @@ export interface CategoryNode {
   children: CategoryNode[];
 }
 
-/**
- * P2002 = vi pham unique constraint. errorHandler khong map loi Prisma, nen
- * P2002 khong bat o day se roi vao nhanh 500.
- *
- * `meta.target` tuy phien ban/driver co the la string[] hoac string → ep ve text
- * roi tim "slug" cho chac.
- */
-function isSlugConflict(err: unknown): boolean {
-  if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== "P2002") {
-    return false;
-  }
-  const target = err.meta?.target;
-  const asText = Array.isArray(target) ? target.join(",") : String(target ?? "");
-  return asText.includes("slug");
-}
-
-/**
- * Tim slug con trong dang `base`, `base-2`, `base-3`...
- *
- * KHONG loc `deletedAt: null`: cot slug @unique tren toan bang, category da
- * soft-delete VAN giu slug cua no. Loc deletedAt o day se de xuat mot slug
- * trong tren giay to nhung insert vao la vo unique constraint.
- */
-async function findFreeSlug(base: string): Promise<string> {
+/** Slug @unique tren toan bang → KHONG loc deletedAt (xem unique-slug.ts). */
+async function findTakenSlugs(base: string): Promise<Set<string>> {
   const rows = await prisma.category.findMany({
     where: { slug: { startsWith: base } },
     select: { slug: true },
   });
-
-  const taken = new Set(rows.map((r) => r.slug));
-  if (!taken.has(base)) return base;
-
-  for (let i = 2; ; i++) {
-    const candidate = `${base}-${i}`;
-    if (!taken.has(candidate)) return candidate;
-  }
+  return new Set(rows.map((r) => r.slug));
 }
 
 /** Cha phai ton tai, va phai la cap 1 — cha da co cha nghia la con nay se la cap 3. */
@@ -82,36 +53,24 @@ async function assertParentUsable(parentId: string) {
   }
 }
 
-const MAX_SLUG_ATTEMPTS = 5;
-
 async function create(input: CreateCategoryInput) {
   if (input.parentId) await assertParentUsable(input.parentId);
 
-  const base = slugify(input.name); // zod da dam bao khac rong
+  // zod da dam bao name slugify ra khac rong.
+  const created = await insertWithUniqueSlug(input.name, findTakenSlugs, (slug) =>
+    prisma.category.create({
+      data: {
+        name: input.name,
+        slug,
+        parentId: input.parentId ?? null,
+      },
+      select: categorySelect,
+    }),
+  );
 
-  // Do slug trong roi VAN phai retry: giua luc do va luc insert, mot request khac
-  // co the chiem mat slug do. Probe chi de giam va cham; retry moi la cai dam bao.
-  for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
-    try {
-      const created = await prisma.category.create({
-        data: {
-          name: input.name,
-          slug: await findFreeSlug(base),
-          parentId: input.parentId ?? null,
-        },
-        select: categorySelect,
-      });
+  await cacheDel(TREE_KEY);
 
-      await cacheDel(TREE_KEY);
-
-      return created;
-    } catch (err) {
-      if (isSlugConflict(err)) continue;
-      throw err;
-    }
-  }
-
-  throw Errors.conflict("Không tạo được slug duy nhất, vui lòng thử lại", "SLUG_CONFLICT");
+  return created;
 }
 
 async function update(id: string, input: UpdateCategoryInput) {

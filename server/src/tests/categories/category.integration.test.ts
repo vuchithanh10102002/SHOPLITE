@@ -3,6 +3,7 @@ import { api } from "../helpers/request";
 import { createLoggedInAdmin, createLoggedInUser } from "../helpers/auth";
 import { prisma } from "../../lib/prisma";
 import { redisConnection } from "../../lib/redis";
+import { normalizeText } from "../../shared/slugify";
 
 const TREE_KEY = "categories:tree";
 
@@ -372,6 +373,7 @@ describe("Categories — xoa", () => {
       data: {
         categoryId: c.body.data.id,
         name: "Áo thun trắng",
+        nameNormalized: normalizeText("Áo thun trắng"),
         slug: "ao-thun-trang",
         price: "199000",
         stock: 10,

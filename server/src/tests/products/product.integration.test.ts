@@ -1,0 +1,367 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import { api } from "../helpers/request";
+import { createLoggedInAdmin, createLoggedInUser } from "../helpers/auth";
+import { prisma } from "../../lib/prisma";
+
+/**
+ * KHONG `async`: tra thang chuoi supertest de goi tiep `.expect(...)`.
+ * Boc async vao la tra Promise → mat het method cua supertest.
+ */
+function createProduct(
+  accessToken: string,
+  body: Record<string, unknown>,
+) {
+  return api
+    .post("/api/products")
+    .set("Authorization", `Bearer ${accessToken}`)
+    .send(body);
+}
+
+/** Product PHAI thuoc mot category → tao san mot category qua API va tra id. */
+async function seedCategory(accessToken: string, name = "Thời trang"): Promise<string> {
+  const res = await api
+    .post("/api/categories")
+    .set("Authorization", `Bearer ${accessToken}`)
+    .send({ name })
+    .expect(201);
+
+  return res.body.data.id;
+}
+
+/** Body product day du hop le — test chi override cai no quan tam. */
+function validBody(categoryId: string, over: Record<string, unknown> = {}) {
+  return {
+    name: "Áo thun trắng",
+    categoryId,
+    price: 199000,
+    stock: 10,
+    description: "Áo cotton",
+    ...over,
+  };
+}
+
+describe("Products — quyen truy cap", () => {
+  it("GET / la public, khong can token", async () => {
+    const res = await api.get("/api/products").expect(200);
+
+    expect(res.body).toMatchObject({ success: true, data: [] });
+    expect(res.body.meta).toMatchObject({ page: 1, total: 0, totalPages: 0 });
+  });
+
+  it("POST khong co token → 401", async () => {
+    const res = await api.post("/api/products").send({ name: "Áo" }).expect(401);
+
+    expect(res.body.error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("POST bang CUSTOMER → 403", async () => {
+    const { accessToken } = await createLoggedInUser();
+
+    const res = await createProduct(accessToken, { name: "Áo" }).expect(403);
+
+    expect(res.body.error.code).toBe("FORBIDDEN");
+  });
+});
+
+describe("Products — tao", () => {
+  let adminToken: string;
+  let categoryId: string;
+
+  beforeEach(async () => {
+    ({ accessToken: adminToken } = await createLoggedInAdmin());
+    categoryId = await seedCategory(adminToken);
+  });
+
+  it("admin tao duoc, slug tu sinh bo dau, KHONG lo `stock` ra ngoai", async () => {
+    const res = await createProduct(adminToken, validBody(categoryId)).expect(201);
+
+    expect(res.body.data).toMatchObject({
+      name: "Áo thun trắng",
+      slug: "ao-thun-trang",
+      price: "199000",
+      stockStatus: "in_stock",
+      category: { id: categoryId, name: "Thời trang" },
+    });
+    // stock la thong tin noi bo — public API KHONG duoc thay con so ton kho.
+    expect(res.body.data).not.toHaveProperty("stock");
+  });
+
+  it("price tra ve la string chu khong phai number (Prisma Decimal)", async () => {
+    const res = await createProduct(adminToken, validBody(categoryId, { price: 50000 })).expect(201);
+
+    expect(typeof res.body.data.price).toBe("string");
+    expect(res.body.data.price).toBe("50000");
+  });
+
+  it("stockStatus theo nguong: 0 = out, <=5 = low, >5 = in_stock", async () => {
+    const out = await createProduct(adminToken, validBody(categoryId, { name: "Áo A", stock: 0 }));
+    const low = await createProduct(adminToken, validBody(categoryId, { name: "Áo B", stock: 3 }));
+    const inS = await createProduct(adminToken, validBody(categoryId, { name: "Áo C", stock: 20 }));
+
+    expect(out.body.data.stockStatus).toBe("out");
+    expect(low.body.data.stockStatus).toBe("low");
+    expect(inS.body.data.stockStatus).toBe("in_stock");
+  });
+
+  it("ten trung → slug tu them hau to", async () => {
+    const a = await createProduct(adminToken, validBody(categoryId, { name: "Áo" })).expect(201);
+    const b = await createProduct(adminToken, validBody(categoryId, { name: "Áo" })).expect(201);
+
+    expect([a.body.data.slug, b.body.data.slug]).toEqual(["ao", "ao-2"]);
+  });
+
+  it("categoryId khong ton tai → 404", async () => {
+    const res = await createProduct(
+      adminToken,
+      validBody("00000000-0000-4000-8000-000000000000"),
+    ).expect(404);
+
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("gia <= 0 → 400", async () => {
+    const res = await createProduct(adminToken, validBody(categoryId, { price: 0 })).expect(400);
+
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("gia qua 2 chu so thap phan → 400", async () => {
+    const res = await createProduct(adminToken, validBody(categoryId, { price: 10.999 })).expect(400);
+
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("stock am → 400", async () => {
+    const res = await createProduct(adminToken, validBody(categoryId, { stock: -1 })).expect(400);
+
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
+describe("Products — GET /:slug", () => {
+  let adminToken: string;
+  let categoryId: string;
+
+  beforeEach(async () => {
+    ({ accessToken: adminToken } = await createLoggedInAdmin());
+    categoryId = await seedCategory(adminToken);
+  });
+
+  it("tra product theo slug, public, khong lo stock", async () => {
+    await createProduct(adminToken, validBody(categoryId)).expect(201);
+
+    const res = await api.get("/api/products/ao-thun-trang").expect(200);
+
+    expect(res.body.data).toMatchObject({ slug: "ao-thun-trang", stockStatus: "in_stock" });
+    expect(res.body.data).not.toHaveProperty("stock");
+  });
+
+  it("slug khong ton tai → 404", async () => {
+    const res = await api.get("/api/products/khong-co-that").expect(404);
+
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("slug sai dinh dang (chu hoa) → 400", async () => {
+    const res = await api.get("/api/products/Ao-Thun").expect(400);
+
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("product da soft-delete → 404 (bien khoi public)", async () => {
+    const created = await createProduct(adminToken, validBody(categoryId)).expect(201);
+
+    await api
+      .delete(`/api/products/${created.body.data.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+
+    await api.get("/api/products/ao-thun-trang").expect(404);
+  });
+});
+
+describe("Products — list filter/sort/pagination", () => {
+  let adminToken: string;
+  let catA: string;
+  let catB: string;
+
+  beforeEach(async () => {
+    ({ accessToken: adminToken } = await createLoggedInAdmin());
+    catA = await seedCategory(adminToken, "Thời trang");
+    catB = await seedCategory(adminToken, "Điện tử");
+
+    await createProduct(adminToken, validBody(catA, { name: "Áo khoác", price: 300000, stock: 10 }));
+    await createProduct(adminToken, validBody(catA, { name: "Áo thun", price: 100000, stock: 10 }));
+    await createProduct(adminToken, validBody(catB, { name: "Tai nghe", price: 200000, stock: 10 }));
+  });
+
+  it("search bo dau: q=ao khop 'Áo ...' (tim tren cot nameNormalized)", async () => {
+    const res = await api.get("/api/products?q=ao").expect(200);
+
+    const names = res.body.data.map((p: any) => p.name).sort();
+    expect(names).toEqual(["Áo khoác", "Áo thun"]);
+    expect(res.body.meta.total).toBe(2);
+  });
+
+  it("loc theo categoryId", async () => {
+    const res = await api.get(`/api/products?categoryId=${catB}`).expect(200);
+
+    expect(res.body.data.map((p: any) => p.name)).toEqual(["Tai nghe"]);
+  });
+
+  it("loc khoang gia [150000, 250000]", async () => {
+    const res = await api.get("/api/products?minPrice=150000&maxPrice=250000").expect(200);
+
+    expect(res.body.data.map((p: any) => p.name)).toEqual(["Tai nghe"]);
+  });
+
+  it("sort=price_asc", async () => {
+    const res = await api.get("/api/products?sort=price_asc").expect(200);
+
+    expect(res.body.data.map((p: any) => p.price)).toEqual(["100000", "200000", "300000"]);
+  });
+
+  it("sort=price_desc", async () => {
+    const res = await api.get("/api/products?sort=price_desc").expect(200);
+
+    expect(res.body.data.map((p: any) => p.price)).toEqual(["300000", "200000", "100000"]);
+  });
+
+  it("phan trang: limit=2 → trang 1 co 2, meta.totalPages=2", async () => {
+    const res = await api.get("/api/products?limit=2&page=1").expect(200);
+
+    expect(res.body.data).toHaveLength(2);
+    expect(res.body.meta).toMatchObject({ page: 1, limit: 2, total: 3, totalPages: 2 });
+  });
+
+  it("trang vuot so trang → data rong + meta dung, KHONG phai 404", async () => {
+    const res = await api.get("/api/products?page=999").expect(200);
+
+    expect(res.body.data).toEqual([]);
+    expect(res.body.meta.total).toBe(3);
+  });
+
+  it("limit vuot 50 → clamp 50, khong phai 400", async () => {
+    const res = await api.get("/api/products?limit=999").expect(200);
+
+    expect(res.body.meta.limit).toBe(50);
+  });
+
+  it("minPrice > maxPrice → 400", async () => {
+    const res = await api.get("/api/products?minPrice=500000&maxPrice=100000").expect(400);
+
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
+describe("Products — sua", () => {
+  let adminToken: string;
+  let categoryId: string;
+
+  beforeEach(async () => {
+    ({ accessToken: adminToken } = await createLoggedInAdmin());
+    categoryId = await seedCategory(adminToken);
+  });
+
+  function patch(id: string, body: Record<string, unknown>) {
+    return api
+      .patch(`/api/products/${id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send(body);
+  }
+
+  it("doi ten KHONG doi slug, va van tim ra bang search theo ten moi", async () => {
+    const created = await createProduct(adminToken, validBody(categoryId, { name: "Áo" })).expect(201);
+
+    const res = await patch(created.body.data.id, { name: "Quần jean" }).expect(200);
+
+    // Ten doi, slug giu (slug da nam trong URL nguoi ta luu).
+    expect(res.body.data).toMatchObject({ name: "Quần jean", slug: "ao" });
+
+    // nameNormalized phai duoc cap nhat cung name → search "quan" ra ket qua.
+    const found = await api.get("/api/products?q=quan").expect(200);
+    expect(found.body.data.map((p: any) => p.name)).toEqual(["Quần jean"]);
+  });
+
+  it("gui description=null → xoa mo ta (phan biet voi undefined)", async () => {
+    const created = await createProduct(adminToken, validBody(categoryId)).expect(201);
+
+    const res = await patch(created.body.data.id, { description: null }).expect(200);
+
+    expect(res.body.data.description).toBeNull();
+  });
+
+  it("doi categoryId sang category khong ton tai → 404", async () => {
+    const created = await createProduct(adminToken, validBody(categoryId)).expect(201);
+
+    const res = await patch(created.body.data.id, {
+      categoryId: "00000000-0000-4000-8000-000000000000",
+    }).expect(404);
+
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("body rong → 400 (phai co it nhat mot truong)", async () => {
+    const created = await createProduct(adminToken, validBody(categoryId)).expect(201);
+
+    const res = await patch(created.body.data.id, {}).expect(400);
+
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("id khong phai uuid → 400", async () => {
+    const res = await patch("khong-phai-uuid", { stock: 5 }).expect(400);
+
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("sua product khong ton tai → 404", async () => {
+    const res = await patch("00000000-0000-4000-8000-000000000000", { stock: 5 }).expect(404);
+
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+});
+
+describe("Products — xoa", () => {
+  let adminToken: string;
+  let categoryId: string;
+
+  beforeEach(async () => {
+    ({ accessToken: adminToken } = await createLoggedInAdmin());
+    categoryId = await seedCategory(adminToken);
+  });
+
+  it("xoa la soft delete: row van con trong DB, deletedAt duoc set", async () => {
+    const created = await createProduct(adminToken, validBody(categoryId)).expect(201);
+
+    await api
+      .delete(`/api/products/${created.body.data.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+
+    const row = await prisma.product.findUnique({ where: { id: created.body.data.id } });
+    expect(row?.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it("sau khi xoa → bien khoi public list", async () => {
+    const created = await createProduct(adminToken, validBody(categoryId)).expect(201);
+
+    await api
+      .delete(`/api/products/${created.body.data.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+
+    const res = await api.get("/api/products").expect(200);
+    expect(res.body.data).toEqual([]);
+    expect(res.body.meta.total).toBe(0);
+  });
+
+  it("xoa product khong ton tai → 404", async () => {
+    const res = await api
+      .delete("/api/products/00000000-0000-4000-8000-000000000000")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(404);
+
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+});

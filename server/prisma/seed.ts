@@ -54,6 +54,10 @@ import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 
+// Dung CHUNG ham voi product.service — seed tu viet lai phep bo dau la tao nguon
+// chan ly thu hai, doi ben nay quen ben kia la name_normalized sai am tham.
+import { normalizeText } from '../src/shared/slugify';
+
 // ─── Prisma enum — chỉ dùng string literal, tránh import enum bị lỗi ──────────
 //
 // LÝ DO không import { Role, OrderStatus, ... } từ @prisma/client:
@@ -494,18 +498,20 @@ async function main(): Promise<void> {
     const product = await prisma.product.upsert({
       where:  { slug: p.slug },
       update: {
-        price:     new Decimal(p.price),
-        stock:     p.stock,
-        deletedAt: p.deleted ? new Date('2024-01-01') : null,
+        nameNormalized: normalizeText(p.name),
+        price:          new Decimal(p.price),
+        stock:          p.stock,
+        deletedAt:      p.deleted ? new Date('2024-01-01') : null,
       },
       create: {
-        categoryId:  catId,
-        name:        p.name,
-        slug:        p.slug,
-        description: p.description,
-        price:       new Decimal(p.price),
-        stock:       p.stock,
-        deletedAt:   p.deleted ? new Date('2024-01-01') : null,
+        categoryId:     catId,
+        name:           p.name,
+        nameNormalized: normalizeText(p.name),
+        slug:           p.slug,
+        description:    p.description,
+        price:          new Decimal(p.price),
+        stock:          p.stock,
+        deletedAt:      p.deleted ? new Date('2024-01-01') : null,
       },
     });
     productMap[p.slug] = product.id;

@@ -1,8 +1,11 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
+    // rootDir ".." (khong phai ".") de seed.ts import duoc ../src/shared/slugify.
+    // Neu khong, seed phai tu viet lai ham bo dau → hai nguon chan ly, chac chan
+    // troi lech nhau: doi slugify ma quen doi seed la name_normalized sai am tham.
+    "rootDir": "..",
     "noEmit": true
   },
-  "include": ["."]
+  "include": [".", "../src/shared"]
 }
