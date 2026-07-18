@@ -1,7 +1,9 @@
-import { Prisma, OrderStatus } from "@prisma/client";
+import { Prisma, OrderStatus, PaymentStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { Errors } from "../../shared/errors";
 import { PageMeta } from "../../shared/response";
+import { emailQueue } from "../../lib/queue";
+import { paymentService } from "../payments/payment.service";
 import { CreateOrderInput, ListOrderQuery } from "./order.schemas";
 
 // ---- Public shapes (lo tap con field, khong bao gio ...rest) ----
@@ -20,6 +22,13 @@ export interface PublicOrderHistory {
   createdAt: Date;
 }
 
+export interface PublicPayment {
+  status: PaymentStatus;
+  amount: string; // Decimal → string
+  providerTxnId: string | null;
+  createdAt: Date;
+}
+
 export interface PublicOrder {
   id: string;
   status: OrderStatus;
@@ -28,6 +37,7 @@ export interface PublicOrder {
   createdAt: Date;
   items: PublicOrderItem[];
   history: PublicOrderHistory[];
+  payment: PublicPayment | null; // null truoc khi finalize; co sau b5
 }
 
 // Detail lay ca userId (kiem IDOR) + items + history. userId KHONG lo ra ngoai.
@@ -46,6 +56,7 @@ const orderDetailSelect = {
     select: { fromStatus: true, toStatus: true, reason: true, createdAt: true },
     orderBy: { id: "asc" },
   },
+  payment: { select: { status: true, amount: true, providerTxnId: true, createdAt: true } },
 } satisfies Prisma.OrderSelect;
 
 type OrderDetailRow = Prisma.OrderGetPayload<{ select: typeof orderDetailSelect }>;
@@ -69,6 +80,12 @@ function toPublicOrder(row: OrderDetailRow): PublicOrder {
       reason: h.reason,
       createdAt: h.createdAt,
     })),
+    payment: row.payment && {
+      status: row.payment.status,
+      amount: row.payment.amount.toString(),
+      providerTxnId: row.payment.providerTxnId,
+      createdAt: row.payment.createdAt,
+    },
   };
 }
 
@@ -203,7 +220,26 @@ async function createOrder(
     // ghi cua customer, rat thuong xuyen — bump moi don se dap sach cache product
     // lien tuc, hong muc dich cache. stockStatus hien thi tre toi da 60s (TTL) la
     // chap nhan duoc; chan cung that su nam o conditional UPDATE tren, khong o cache.
-    return { order: toPublicOrder(created), replayed: false };
+
+    // FINALIZE (b5): goi thanh toan NGOAI tx tru kho → PAID hoac hoan kho +
+    // CANCELLED. Don dong bo o day nen response phan anh trang thai cuoi.
+    await paymentService.settlePayment({
+      id: created.id,
+      totalAmount: created.totalAmount,
+      items: created.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+    });
+
+    // Email SAU khi settle va NGOAI moi transaction — email khong hoan tac duoc
+    // neu tx rollback. Payload chi mang orderId; worker doc DB → trang thai THAT
+    // (PAID/CANCELLED) tai luc gui. Ca duong thanh cong lan that bai deu bao.
+    await emailQueue.add("order-status", { orderId: created.id });
+
+    // Doc lai detail de phan anh status cuoi + payment record vua tao trong settle.
+    const settled = await prisma.order.findUnique({
+      where: { id: created.id },
+      select: orderDetailSelect,
+    });
+    return { order: toPublicOrder(settled!), replayed: false };
   } catch (e) {
     // 6. RACE cung idempotency key: 2 request cung vao (ca hai thay "chua ton tai"
     // o buoc 1), 1 thang, 1 vuong UNIQUE(userId, key) → P2002. Con lai roll back

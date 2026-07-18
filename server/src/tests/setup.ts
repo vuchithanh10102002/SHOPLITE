@@ -63,6 +63,22 @@ vi.mock("../lib/cloudinary", async () => {
   return { cloudinary: { uploader: { upload_stream, destroy } } };
 });
 
+/**
+ * Mock CONG thanh toan (khong mock settlePayment — do la logic that can test).
+ * Mac dinh: charge THANH CONG + TUC THI (bo sleep 200-800ms + bo random cua
+ * PAYMENT_FAIL_RATE) → moi don trong test ket PAID xac dinh. Test duong that bai
+ * override bang `(paymentProvider.charge as Mock).mockRejectedValueOnce(new
+ * PaymentDeclinedError())`. Giu nguyen export con lai (PaymentDeclinedError that)
+ * de instanceof trong settlePayment van dung.
+ */
+vi.mock("../modules/payments/payment.provider", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../modules/payments/payment.provider")>();
+  return {
+    ...actual,
+    paymentProvider: { charge: vi.fn(async () => ({ txnId: "txn_test_ok" })) },
+  };
+});
+
 beforeEach(async () => {
   // Thu tu xoa theo chieu phu thuoc khoa ngoai: con truoc, cha sau.
   await prisma.orderItem.deleteMany();

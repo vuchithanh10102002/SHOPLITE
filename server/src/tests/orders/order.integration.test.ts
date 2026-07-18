@@ -71,7 +71,7 @@ describe("Order — đặt hàng (Phase 4 b4)", () => {
     expect(res.body.error.code).toBe("CART_EMPTY");
   });
 
-  it("đặt hàng thành công → 201, đơn PENDING, total tính server, trừ kho, giỏ sạch", async () => {
+  it("đặt hàng thành công → 201, total tính server, trừ kho, giỏ sạch (settle PAID ở b5)", async () => {
     const p1 = await seedProduct(adminToken, categoryId, { name: "Áo", price: 100000, stock: 10 });
     const p2 = await seedProduct(adminToken, categoryId, { name: "Quần", price: 250000, stock: 5 });
     await addToCart(userToken, p1, 2);
@@ -80,15 +80,16 @@ describe("Order — đặt hàng (Phase 4 b4)", () => {
     const res = await placeOrder(userToken).expect(201);
     const order = res.body.data;
 
-    expect(order.status).toBe("PENDING");
+    // Mock cong thanh toan mac dinh THANH CONG → don ket PAID (finalize dong bo o b5).
+    expect(order.status).toBe("PAID");
     // total = 100000*2 + 250000*1 = 450000, tra ve string (Decimal)
     expect(order.totalAmount).toBe("450000");
     expect(order.items).toHaveLength(2);
-    // history co ban ghi PENDING dau tien
-    expect(order.history).toHaveLength(1);
-    expect(order.history[0]).toMatchObject({ fromStatus: null, toStatus: "PENDING" });
+    // history: PENDING (tao) → PAID (thanh toan)
+    expect(order.history.map((h: { toStatus: string }) => h.toStatus)).toEqual(["PENDING", "PAID"]);
+    expect(order.history[0].fromStatus).toBeNull();
 
-    // Tru kho that
+    // Tru kho that (PAID giu nguyen kho da tru)
     expect(await stockOf(p1)).toBe(8);
     expect(await stockOf(p2)).toBe(4);
 
