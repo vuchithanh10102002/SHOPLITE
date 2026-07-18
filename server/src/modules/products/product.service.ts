@@ -4,6 +4,7 @@ import { Errors } from "../../shared/errors";
 import { normalizeText } from "../../shared/slugify";
 import { insertWithUniqueSlug } from "../../shared/unique-slug";
 import { PageMeta } from "../../shared/response";
+import { CacheResult, remember, getVersion, bumpVersion } from "../../lib/cache";
 import { CreateProductInput, ListProductQuery, UpdateProductInput } from "./product.schemas";
 
 // `stock` CO trong select (can de tinh stockStatus) nhung KHONG duoc ra khoi
@@ -32,6 +33,19 @@ function stockStatusOf(stock: number): StockStatus {
   return "in_stock";
 }
 
+// ── Cache: version key (handbook 8.2, roadmap Phase 3 buoc 3) ────────────────
+// MOT bien dem duy nhat cho CA list va detail: moi write chi `incr` no la ca hai
+// loai key deu thanh "mo coi". Doi lay su don gian nay, sua 1 san pham lam bay
+// TOAN BO detail cache chu khong rieng cai vua sua — o quy mo nay chap nhan
+// duoc, va khoi phai biet slug luc delete. Day dung la huong "version cho ca
+// list + detail" da chot.
+const VER_KEY = "products:ver";
+
+// TTL 60s (handbook 8.2) — luoi an toan cuoi. Ke ca incr co bug thi cache cu
+// cung chi song them toi da mot nhip 60s.
+const LIST_TTL = 60;
+const DETAIL_TTL = 60;
+
 export interface PublicProduct {
   id: string;
   name: string;
@@ -48,7 +62,8 @@ export interface PublicProduct {
  *
  *  1. Decimal → string. Prisma tra `price` la Decimal object; de no tu serialize
  *     ra JSON thi frontend nhan duoc thu khong doan truoc. Chot mot cho, khong
- *     rai `.toString()` moi controller (roadmap 3.2).
+ *     rai `.toString()` moi controller (roadmap 3.2). Cung nho the ma gia tri
+ *     dem vao cache da la string san — JSON round-trip khong lam bien dang.
  *  2. `stock` (so that, thong tin noi bo) → `stockStatus`. Handbook 6.3: public
  *     API khong duoc thay con so ton kho.
  *
@@ -104,6 +119,10 @@ async function create(input: CreateProductInput): Promise<PublicProduct> {
     }),
   );
 
+  // Co san pham moi → cache list/detail cu deu lac hau. Bump SAU khi DB ghi
+  // xong (handbook 8.3: delete/version, khong update cache khi ghi).
+  await bumpVersion(VER_KEY);
+
   return toPublicProduct(created);
 }
 
@@ -139,6 +158,9 @@ async function update(id: string, input: UpdateProductInput): Promise<PublicProd
     select: productSelect,
   });
 
+  // Day dung cai test DoD kiem: sua 1 san pham → version tang → list lan sau miss.
+  await bumpVersion(VER_KEY);
+
   return toPublicProduct(updated);
 }
 
@@ -156,18 +178,36 @@ async function remove(id: string) {
 
   await prisma.product.update({ where: { id }, data: { deletedAt: new Date() } });
 
+  // San pham vua an di khoi list/detail → cache cu con tra no ra la sai.
+  await bumpVersion(VER_KEY);
+
   return { message: "Đã xóa sản phẩm" };
 }
 
-/** Chua cache — cache-aside cho route nay la buoc 3 (version key). */
-async function getBySlug(slug: string): Promise<PublicProduct> {
-  const row = await prisma.product.findFirst({
-    where: { slug, deletedAt: null },
-    select: productSelect,
-  });
-  if (!row) throw Errors.notFound("sản phẩm");
+/**
+ * Cache-aside bang version key. Tra kem `hit` de controller ghi cache_hit vao
+ * request log — service KHONG dung toi `res`, controller la cho hai the gioi gap.
+ *
+ * Ver nam TRONG key (`products:detail:<ver>:<slug>`) nen khong can xoa gi khi
+ * ghi: mot lan bumpVersion o create/update/remove la key cu thanh mo coi.
+ *
+ * loader() nem notFound TRUOC khi remember kip setex → 404 KHONG bi cache lai.
+ * Dung y muon: neu cache negative, product vua tao xong van bao 404 het mot nhip
+ * TTL.
+ */
+async function getBySlug(slug: string): Promise<CacheResult<PublicProduct>> {
+  const ver = await getVersion(VER_KEY);
+  const key = `products:detail:${ver}:${slug}`;
 
-  return toPublicProduct(row);
+  return remember(key, DETAIL_TTL, async () => {
+    const row = await prisma.product.findFirst({
+      where: { slug, deletedAt: null },
+      select: productSelect,
+    });
+    if (!row) throw Errors.notFound("sản phẩm");
+
+    return toPublicProduct(row);
+  });
 }
 
 /**
@@ -185,7 +225,33 @@ const ORDER_BY: Record<ListProductQuery["sort"], Prisma.ProductOrderByWithRelati
   newest: [{ createdAt: "desc" }, { id: "asc" }],
 };
 
-async function list(query: ListProductQuery): Promise<{ data: PublicProduct[]; meta: PageMeta }> {
+/**
+ * Chuoi khoa on dinh cho cache list — GOP tu cac field da validate, thu tu co
+ * dinh. Hai request cung dieu kien phai ra cung mot chuoi; khac dieu kien phai
+ * ra khac chuoi (neu khong: serve nham ket qua cua query khac).
+ *
+ * `q` di qua normalizeText GIONG HET luc query DB: "Áo" va "áo" cho cung ket
+ * qua (deu tra cot nameNormalized chua "ao"); key theo `q` tho thi cache hai
+ * slot y het nhau — dung nhung phi hit rate.
+ *
+ * Field vang mat → chuoi rong, KHONG phai chuoi "undefined": `?minPrice=0` va
+ * `?minPrice=` phai ra khac nhau. sort/page/limit luon co (zod .default).
+ */
+function paramsKey(q: ListProductQuery): string {
+  return [
+    normalizeText(q.q ?? ""),
+    q.categoryId ?? "",
+    q.minPrice ?? "",
+    q.maxPrice ?? "",
+    q.sort,
+    q.page,
+    q.limit,
+  ].join("|");
+}
+
+async function list(
+  query: ListProductQuery,
+): Promise<CacheResult<{ data: PublicProduct[]; meta: PageMeta }>> {
   const { q, categoryId, minPrice, maxPrice, sort, page, limit } = query;
 
   const where: Prisma.ProductWhereInput = {
@@ -208,24 +274,29 @@ async function list(query: ListProductQuery): Promise<{ data: PublicProduct[]; m
     }),
   };
 
-  // 2 query song song — cung mot `where` de count va data khong the lech nhau.
-  const [total, rows] = await Promise.all([
-    prisma.product.count({ where }),
-    prisma.product.findMany({
-      where,
-      select: productSelect,
-      orderBy: ORDER_BY[sort],
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-  ]);
+  const ver = await getVersion(VER_KEY);
+  const key = `products:list:${ver}:${paramsKey(query)}`;
 
-  // page vuot so trang → data rong + meta dung, KHONG phai 404. "Trang 999
-  // khong co gi" la mot cau tra loi hop le, khong phai loi.
-  return {
-    data: rows.map(toPublicProduct),
-    meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
-  };
+  return remember(key, LIST_TTL, async () => {
+    // 2 query song song — cung mot `where` de count va data khong the lech nhau.
+    const [total, rows] = await Promise.all([
+      prisma.product.count({ where }),
+      prisma.product.findMany({
+        where,
+        select: productSelect,
+        orderBy: ORDER_BY[sort],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    // page vuot so trang → data rong + meta dung, KHONG phai 404. "Trang 999
+    // khong co gi" la mot cau tra loi hop le, khong phai loi.
+    return {
+      data: rows.map(toPublicProduct),
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  });
 }
 
 export const productService = { create, update, remove, getBySlug, list };

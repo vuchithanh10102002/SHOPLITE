@@ -365,3 +365,79 @@ describe("Products — xoa", () => {
     expect(res.body.error.code).toBe("NOT_FOUND");
   });
 });
+
+describe("Products — cache (version key)", () => {
+  let adminToken: string;
+  let categoryId: string;
+
+  beforeEach(async () => {
+    ({ accessToken: adminToken } = await createLoggedInAdmin());
+    categoryId = await seedCategory(adminToken);
+  });
+
+  // Chien luoc chung: sua THANG DB bang prisma (khong qua service → version
+  // KHONG bi bump). Neu route van tra du lieu CU thi no dang phuc vu tu cache —
+  // bang chung hanh vi cua mot cache hit, khoi phai soi log. Roi sua LAI qua API
+  // (co bumpVersion) → route tra du lieu moi → bang chung version da invalidate.
+
+  it("list: lan 2 phuc vu tu cache (sua len DB khong lam doi ket qua)", async () => {
+    await createProduct(adminToken, validBody(categoryId, { name: "Áo" })).expect(201);
+
+    const first = await api.get("/api/products").expect(200);
+    expect(first.body.data.map((p: any) => p.name)).toEqual(["Áo"]);
+
+    // Sua len DB, khong bump version.
+    await prisma.product.updateMany({ data: { name: "Áo sửa lén" } });
+
+    const second = await api.get("/api/products").expect(200);
+    expect(second.body.data.map((p: any) => p.name)).toEqual(["Áo"]); // van la ban cache
+  });
+
+  it("sua qua API → version tang → list lan sau la cache miss, thay du lieu moi", async () => {
+    const created = await createProduct(adminToken, validBody(categoryId, { name: "Áo" })).expect(201);
+
+    await api.get("/api/products").expect(200); // nap cache duoi version cu
+
+    await api
+      .patch(`/api/products/${created.body.data.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "Quần" })
+      .expect(200);
+
+    const after = await api.get("/api/products").expect(200);
+    expect(after.body.data.map((p: any) => p.name)).toEqual(["Quần"]);
+  });
+
+  it("getBySlug cung duoc cache va cung bi version bump lam moi", async () => {
+    await createProduct(adminToken, validBody(categoryId, { name: "Áo" })).expect(201);
+
+    const first = await api.get("/api/products/ao").expect(200);
+    expect(first.body.data.price).toBe("199000");
+
+    // Sua len DB → detail van serve ban cache.
+    await prisma.product.updateMany({ data: { price: 500000 } });
+    const cached = await api.get("/api/products/ao").expect(200);
+    expect(cached.body.data.price).toBe("199000");
+
+    // Sua qua API → bumpVersion → detail lam moi.
+    const row = await prisma.product.findFirst({ where: { slug: "ao" } });
+    await api
+      .patch(`/api/products/${row!.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ price: 250000 })
+      .expect(200);
+
+    const fresh = await api.get("/api/products/ao").expect(200);
+    expect(fresh.body.data.price).toBe("250000");
+  });
+
+  it("them san pham moi → version tang → list cu khong con che giau hang moi", async () => {
+    await createProduct(adminToken, validBody(categoryId, { name: "Áo" })).expect(201);
+    await api.get("/api/products").expect(200); // nap cache 1 san pham
+
+    await createProduct(adminToken, validBody(categoryId, { name: "Quần" })).expect(201);
+
+    const res = await api.get("/api/products").expect(200);
+    expect(res.body.meta.total).toBe(2);
+  });
+});

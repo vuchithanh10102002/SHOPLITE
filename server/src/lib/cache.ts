@@ -64,3 +64,42 @@ export async function cacheDel(...keys: string[]): Promise<void> {
     logger.warn({ err, keys }, "cache: xoa key loi — TTL se tu don");
   }
 }
+
+/**
+ * Doc version hien tai cua mot namespace (vd "products:ver"), de ghep vao key:
+ * `products:list:<ver>:<params>`. Handbook 8.2.
+ *
+ * FAIL-OPEN nhu remember: Redis chet → tra "0". `null` (chua ai incr bao gio)
+ * cung tra "0" — day la version khoi dau hop le, khong phai loi.
+ *
+ * Vi sao "0" an toan khi Redis vua song lai: moi key deu mang version dang
+ * chay, write tiep theo `incr` len 1 → cac key version-0 thanh mo coi, het TTL
+ * tu chet. Khong bao gio serve du lieu cu vinh vien.
+ */
+export async function getVersion(key: string): Promise<string> {
+  try {
+    return (await redisConnection.get(key)) ?? "0";
+  } catch (err) {
+    logger.warn({ err, key }, "cache: doc version loi, dung '0'");
+    return "0";
+  }
+}
+
+/**
+ * Tang version sau khi ghi DB thanh cong → moi key mang version cu tro thanh
+ * "mo coi", khong con duoc doc lai, TTL tu don (handbook 8.2). Khong xoa gi,
+ * khong SCAN, khong race.
+ *
+ * Fail giong cacheDel: DB da ghi xong, incr hong chi lam du lieu cu song them
+ * toi da mot nhip TTL — khong dang de request cua nguoi dung fail theo.
+ *
+ * incr tren key chua ton tai bat dau tu 0 → thanh "1"; khop voi getVersion tra
+ * "0" cho key chua co, nen lan write dau tien van day version len that.
+ */
+export async function bumpVersion(key: string): Promise<void> {
+  try {
+    await redisConnection.incr(key);
+  } catch (err) {
+    logger.warn({ err, key }, "cache: incr version loi — cache cu se het TTL tu don");
+  }
+}

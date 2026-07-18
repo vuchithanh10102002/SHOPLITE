@@ -9,15 +9,23 @@ import { listProductQuerySchema } from "./product.schemas";
 async function list(_req: Request, res: Response) {
   // Query da qua validateQuery → doc lai TU res.locals (co kieu), KHONG doc
   // req.query (string tho). Xem validate.ts:validateQuery de biet vi sao.
-  const { data, meta } = await productService.list(getQuery(res, listProductQuerySchema));
+  //
+  // Service tra CacheResult: `hit` di vao res.locals de httpLogger gan cache_hit
+  // vao dong log ket thuc request (giong het category.controller). Service khong
+  // biet gi ve `res` — controller la cho hai the gioi gap.
+  const { value, hit } = await productService.list(getQuery(res, listProductQuerySchema));
+  res.locals.cacheHit = hit;
 
-  sendSuccess(res, data, 200, meta);
+  sendSuccess(res, value.data, 200, value.meta);
 }
 
 // validateParams(productSlugSchema) da ep :slug khop SLUG_PATTERN → chac chan la
 // string. @types/express v5 khai bao req.params[k] la `string | string[]`.
 async function getBySlug(req: Request, res: Response) {
-  sendSuccess(res, await productService.getBySlug(req.params.slug as string));
+  const { value, hit } = await productService.getBySlug(req.params.slug as string);
+  res.locals.cacheHit = hit;
+
+  sendSuccess(res, value);
 }
 
 async function create(req: Request, res: Response) {
