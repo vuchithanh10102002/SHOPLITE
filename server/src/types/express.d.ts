@@ -20,6 +20,7 @@ declare global {
     interface UserPayload {
       id: string;
       role: string;
+      verified: boolean; // emailVerified, lay tu claim `verified` trong access token
     }
 
     interface Request {

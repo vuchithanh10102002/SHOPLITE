@@ -25,11 +25,15 @@ export async function authenticate(
     const payload = verifyAccessToken(token) as {
       sub: string;
       role: string;
+      verified?: boolean;
     };
 
     req.user = {
       id: payload.sub,
       role: payload.role,
+      // Token cu (truoc khi them claim) co the thieu → coi nhu chua verified.
+      // Token song 15' nen het rat nhanh, khong ket lai lau.
+      verified: payload.verified ?? false,
     };
 
     next();
@@ -60,4 +64,21 @@ export function requireRole(...roles: string[]) {
 
     next();
   };
+}
+
+/**
+ * Chan neu email chua xac thuc (BR4: chua verify van login/gom gio duoc, nhung
+ * KHONG dat hang duoc). LUON dat sau `authenticate` — doc `req.user.verified` do
+ * authenticate lay tu claim trong access token.
+ *
+ *   router.post("/", authenticate, requireVerified, ...)
+ *
+ * 403 EMAIL_NOT_VERIFIED (khac 403 FORBIDDEN cua role) → frontend phan biet duoc
+ * "cần xác thực email" voi "khong du quyen" de hien dung thong bao.
+ */
+export function requireVerified(req: Request, _res: Response, next: NextFunction) {
+  if (!req.user) return next(Errors.unauthorized());
+  if (!req.user.verified) return next(Errors.emailNotVerified());
+
+  next();
 }
