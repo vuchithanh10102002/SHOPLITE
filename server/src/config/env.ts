@@ -11,7 +11,15 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_ACCESS_EXPIRES_IN: z.string(),
   JWT_REFRESH_EXPIRES_IN: z.string(),
-  CLOUDINARY_URL: z.string(),
+  // PHAI dung dang cloudinary://key:secret@cloud-name. Neu chi z.string() thi
+  // gia tri rac (vd "dummy") lot qua day, roi SDK cloudinary NEM ngay luc IMPORT
+  // package (utils/index.js goi config() luc require) → sap ca server voi stack
+  // kho hieu. Siet o day de env.ts chet som voi thong bao ro, cung cho voi
+  // DATABASE_URL/REDIS_URL. Dev khong xai upload van phai dat 1 URL hop dang
+  // (vd cloudinary://x:y@demo) — coi Cloudinary la ha tang bat buoc (handbook).
+  CLOUDINARY_URL: z
+    .string()
+    .startsWith("cloudinary://", "CLOUDINARY_URL phải có dạng cloudinary://key:secret@cloud-name"),
   SMTP_URL: z.string(),
   CLIENT_URL: z.string().url(),
   PAYMENT_FAIL_RATE: z.coerce.number().min(0).max(1).default(0.2),

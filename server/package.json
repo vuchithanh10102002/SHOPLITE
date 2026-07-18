@@ -19,6 +19,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^9.0.0",
     "@prisma/client": "^6.19.3",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.79.2",
@@ -38,6 +39,7 @@
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "redis": "^6.1.0",
+    "swagger-ui-express": "^5.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -51,6 +53,7 @@
     "@types/nodemailer": "^8.0.1",
     "@types/pino-http": "^5.8.4",
     "@types/supertest": "^7.2.0",
+    "@types/swagger-ui-express": "^4.1.8",
     "nodemon": "^3.1.14",
     "prisma": "^6.19.3",
     "supertest": "^7.2.2",

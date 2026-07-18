@@ -12,6 +12,8 @@ import authRoutes from "./modules/auth/auth.routes";
 import categoryRoutes from "./modules/categories/category.routes";
 import productRoutes from "./modules/products/product.routes";
 import cookieParser from "cookie-parser";
+import swaggerUi from "swagger-ui-express";
+import { openApiDocument } from "./docs/openapi";
 import { env } from "./config/env";
 
 const app = express();
@@ -46,6 +48,20 @@ app.use(requestId);
 app.use(httpLogger);
 
 app.use("/health", healthRouter);
+
+// Swagger UI tai /api/docs (handbook: docs sinh tu zod → khong lech code).
+// helmet() o tren da dat CSP `script-src 'self'` → chan inline script boot cua
+// Swagger UI, trang se trang bong. Go rieng CSP cho path nay (chi trang docs,
+// khong dung toi API); assets cua UI cung di qua prefix nay nen duoc phu luon.
+app.use(
+  "/api/docs",
+  (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    res.removeHeader("Content-Security-Policy");
+    next();
+  },
+  swaggerUi.serve,
+  swaggerUi.setup(openApiDocument, { customSiteTitle: "ShopLite API" }),
+);
 
 const schema = z.object({
     name: z.string(),

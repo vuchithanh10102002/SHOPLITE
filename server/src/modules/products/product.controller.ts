@@ -20,6 +20,19 @@ async function list(_req: Request, res: Response) {
   sendSuccess(res, value.data, 200, value.meta);
 }
 
+// Nhu list() nhung route da qua requireRole("ADMIN"), va TRUYEN co includeDeleted
+// xuong service — day la CHO DUY NHAT co honor no. Route public goi list() khong
+// truyen opts nen flag khach gui len bi lo di (chong leo quyen + poison cache).
+async function listAdmin(_req: Request, res: Response) {
+  const query = getQuery(res, listProductQuerySchema);
+  const { value, hit } = await productService.list(query, {
+    includeDeleted: query.includeDeleted,
+  });
+  res.locals.cacheHit = hit;
+
+  sendSuccess(res, value.data, 200, value.meta);
+}
+
 // validateParams(productSlugSchema) da ep :slug khop SLUG_PATTERN → chac chan la
 // string. @types/express v5 khai bao req.params[k] la `string | string[]`.
 async function getBySlug(req: Request, res: Response) {
@@ -62,6 +75,7 @@ async function removeImage(req: Request, res: Response) {
 
 export const productController = {
   list,
+  listAdmin,
   getBySlug,
   create,
   update,

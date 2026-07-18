@@ -24,4 +24,5 @@ export const uploadSingle = multer({
     if (ALLOWED_MIME.has(file.mimetype)) return cb(null, true);
     cb(new AppError(400, "INVALID_IMAGE_TYPE", "Chỉ nhận ảnh JPEG, PNG, WebP"));
   },
+  
 }).single("image");

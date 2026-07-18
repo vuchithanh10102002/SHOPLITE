@@ -22,6 +22,10 @@ const productSelect = {
   price: true,
   stock: true,
   createdAt: true,
+  // `deletedAt` select o day de nhanh admin (?includeDeleted) danh dau hang da
+  // xoa — nhung KHONG lot ra public: toPublicProduct() khong liet ke no, chi
+  // toAdminProduct() moi tra. Select thua mot cot nullable, khong dang ke.
+  deletedAt: true,
   category: { select: { id: true, name: true, slug: true } },
   images: {
     select: { id: true, url: true, sortOrder: true },
@@ -100,6 +104,20 @@ function toPublicProduct(row: ProductRow): PublicProduct {
     images: row.images.map((img) => ({ id: img.id, url: img.url, sortOrder: img.sortOrder })),
     createdAt: row.createdAt,
   };
+}
+
+/**
+ * Chi dung o nhanh admin (?includeDeleted). = public + `deletedAt` de admin biet
+ * CAI NAO da xoa; list ma khong phan biet duoc thi vo dung. `deletedAt` co CHU y
+ * nam ngoai PublicProduct/toPublicProduct — day la field admin, khong duoc lo ra
+ * public API.
+ */
+export interface AdminProduct extends PublicProduct {
+  deletedAt: Date | null;
+}
+
+function toAdminProduct(row: ProductRow): AdminProduct {
+  return { ...toPublicProduct(row), deletedAt: row.deletedAt };
 }
 
 /** Slug @unique tren toan bang → KHONG loc deletedAt (xem unique-slug.ts). */
@@ -270,11 +288,16 @@ function paramsKey(q: ListProductQuery): string {
 
 async function list(
   query: ListProductQuery,
+  opts?: { includeDeleted?: boolean },
 ): Promise<CacheResult<{ data: PublicProduct[]; meta: PageMeta }>> {
   const { q, categoryId, minPrice, maxPrice, sort, page, limit } = query;
 
+  // Chi nhanh admin moi duoc thay hang da xoa. `deletedAt: undefined` = Prisma bo
+  // qua dieu kien (tra ca hang song lan hang xoa); viet spread cho ro y do.
+  const includeDeleted = opts?.includeDeleted ?? false;
+
   const where: Prisma.ProductWhereInput = {
-    deletedAt: null,
+    ...(!includeDeleted && { deletedAt: null }),
     ...(categoryId && { categoryId }),
     // Search tren cot da bo dau, va PHAI normalize ca `q`: nguoi ta go "Áo" thi
     // "áo" khong khop gi voi cot nameNormalized (dang chua "ao").
@@ -294,7 +317,14 @@ async function list(
   };
 
   const ver = await getVersion(VER_KEY);
-  const key = `products:list:${ver}:${paramsKey(query)}`;
+  // BAY POISONING: view admin (co hang xoa) va view public KHONG BAO GIO duoc
+  // dung chung key — neu khong admin nap "co hang xoa" roi khach hit trung key
+  // do la lo hang da xoa cho khach. Tach bang tien to `adm`. Nhanh key bam theo
+  // `includeDeleted` THAT (khong phai theo route), nen admin goi ?includeDeleted
+  // =false van an dung public key + public data — nhat quan, khong ro ri.
+  const key = includeDeleted
+    ? `products:list:adm:${ver}:${paramsKey(query)}`
+    : `products:list:${ver}:${paramsKey(query)}`;
 
   return remember(key, LIST_TTL, async () => {
     // 2 query song song — cung mot `where` de count va data khong the lech nhau.
@@ -312,7 +342,9 @@ async function list(
     // page vuot so trang → data rong + meta dung, KHONG phai 404. "Trang 999
     // khong co gi" la mot cau tra loi hop le, khong phai loi.
     return {
-      data: rows.map(toPublicProduct),
+      // Nhanh admin gan them `deletedAt`; AdminProduct la sieu tap cua
+      // PublicProduct nen van khop kieu tra ve.
+      data: rows.map(includeDeleted ? toAdminProduct : toPublicProduct),
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   });

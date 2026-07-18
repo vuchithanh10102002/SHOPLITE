@@ -558,3 +558,97 @@ describe("Products — upload anh", () => {
     expect(res.body.error.code).toBe("NOT_FOUND");
   });
 });
+
+describe("Products — admin xem hang da xoa (?includeDeleted)", () => {
+  let adminToken: string;
+  let liveId: string;
+  let deletedId: string;
+
+  // Hai san pham: mot con song, mot bi soft-delete qua API.
+  beforeEach(async () => {
+    ({ accessToken: adminToken } = await createLoggedInAdmin());
+    const categoryId = await seedCategory(adminToken);
+
+    const live = await createProduct(adminToken, validBody(categoryId, { name: "Áo còn bán" })).expect(201);
+    liveId = live.body.data.id;
+
+    const gone = await createProduct(adminToken, validBody(categoryId, { name: "Áo ngừng bán" })).expect(201);
+    deletedId = gone.body.data.id;
+    await api
+      .delete(`/api/products/${deletedId}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+  });
+
+  const adminList = (query = "") =>
+    api.get(`/api/products/admin${query}`).set("Authorization", `Bearer ${adminToken}`);
+
+  it("public GET / → chi thay hang con song, hang xoa bien mat", async () => {
+    const res = await api.get("/api/products").expect(200);
+
+    expect(res.body.meta.total).toBe(1);
+    expect(res.body.data.map((p: { id: string }) => p.id)).toEqual([liveId]);
+  });
+
+  it("admin /admin?includeDeleted=true → thay CA hai, hang xoa co deletedAt", async () => {
+    const res = await adminList("?includeDeleted=true").expect(200);
+
+    expect(res.body.meta.total).toBe(2);
+    const ids = res.body.data.map((p: { id: string }) => p.id);
+    expect(ids).toContain(liveId);
+    expect(ids).toContain(deletedId);
+
+    const deleted = res.body.data.find((p: { id: string }) => p.id === deletedId);
+    expect(deleted.deletedAt).not.toBeNull();
+    const live = res.body.data.find((p: { id: string }) => p.id === liveId);
+    expect(live.deletedAt).toBeNull();
+  });
+
+  it("admin /admin KHONG co flag → chi thay hang song (flag mac dinh false)", async () => {
+    const res = await adminList().expect(200);
+
+    expect(res.body.meta.total).toBe(1);
+    expect(res.body.data.map((p: { id: string }) => p.id)).toEqual([liveId]);
+  });
+
+  it("admin /admin?includeDeleted=false → van chi hang song (KHONG bi coerce nham thanh true)", async () => {
+    const res = await adminList("?includeDeleted=false").expect(200);
+
+    expect(res.body.meta.total).toBe(1);
+  });
+
+  it("khach khong token vao /admin → 401", async () => {
+    const res = await api.get("/api/products/admin?includeDeleted=true").expect(401);
+
+    expect(res.body.error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("CUSTOMER vao /admin → 403", async () => {
+    const { accessToken } = await createLoggedInUser();
+
+    const res = await api
+      .get("/api/products/admin?includeDeleted=true")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .expect(403);
+
+    expect(res.body.error.code).toBe("FORBIDDEN");
+  });
+
+  it("khach gui ?includeDeleted=true vao route PUBLIC → flag bi lo, van khong thay hang xoa", async () => {
+    const res = await api.get("/api/products?includeDeleted=true").expect(200);
+
+    expect(res.body.meta.total).toBe(1);
+    expect(res.body.data.map((p: { id: string }) => p.id)).toEqual([liveId]);
+  });
+
+  it("chong POISON: admin nap cache /admin TRUOC, khach GET / cung param van khong thay hang xoa", async () => {
+    // Admin nap view "co hang xoa" vao cache truoc.
+    await adminList("?includeDeleted=true").expect(200);
+
+    // Khach hit route public — neu dung chung key se an phai cache admin.
+    const res = await api.get("/api/products").expect(200);
+
+    expect(res.body.meta.total).toBe(1);
+    expect(res.body.data.map((p: { id: string }) => p.id)).toEqual([liveId]);
+  });
+});

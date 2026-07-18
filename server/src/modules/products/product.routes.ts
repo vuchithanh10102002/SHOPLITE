@@ -21,6 +21,17 @@ const router = Router();
 // ket qua vao res.locals — controller doc lai bang getQuery. Xem validate.ts.
 router.get("/", validateQuery(listProductQuerySchema), asyncHandler(productController.list));
 
+// Admin xem ca hang da xoa: /admin?includeDeleted=true. PHAI dat TREN "/:slug" —
+// neu khong "admin" khop luon :slug (dung SLUG_PATTERN) → roi vao getBySlug →
+// 404. Chi ADMIN; flag includeDeleted chi honor o day (xem controller.listAdmin).
+router.get(
+  "/admin",
+  authenticate,
+  requireRole("ADMIN"),
+  validateQuery(listProductQuerySchema),
+  asyncHandler(productController.listAdmin),
+);
+
 // `/:slug` PHAI dat SAU `/` — neu khong Express van khop dung, nhung de "/" ngay
 // tren cho de doc. GET theo slug (khong phai id) — handbook muc 6.
 router.get(

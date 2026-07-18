@@ -130,6 +130,14 @@ export const listProductQuerySchema = z
         .default(DEFAULT_LIMIT)
         .transform((v) => Math.min(v, MAX_LIMIT)),
     ),
+    // Chi co hieu luc o route admin (controller public KHONG truyen no xuong
+    // service). KHONG dung z.coerce.boolean(): Boolean("false") === true — moi
+    // chuoi khac rong deu thanh true, `?includeDeleted=false` lai ra true (bug
+    // im lang). So khop chuoi tuong minh: chi "true" moi la true.
+    includeDeleted: z.preprocess(
+      blankToUndefined,
+      z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+    ),
   })
   .refine(
     (q) => q.minPrice === undefined || q.maxPrice === undefined || q.minPrice <= q.maxPrice,
