@@ -2,11 +2,13 @@ import { Router } from "express";
 import { productController } from "./product.controller";
 import { validate, validateParams, validateQuery } from "../../middlewares/validate";
 import { authenticate, requireRole } from "../../middlewares/auth.middleware";
+import { uploadSingle } from "../../middlewares/upload";
 import { asyncHandler } from "../../shared/asyncHandler";
 import {
   createProductSchema,
   listProductQuerySchema,
   productIdSchema,
+  productImageParamsSchema,
   productSlugSchema,
   updateProductSchema,
 } from "./product.schemas";
@@ -51,6 +53,25 @@ router.delete(
   requireRole("ADMIN"),
   validateParams(productIdSchema),
   asyncHandler(productController.remove),
+);
+
+// Upload anh: chi ADMIN. uploadSingle (multer) dat SAU requireRole — dung nhan
+// buffer 5MB roi moi phat hien khong phai admin. Field form-data ten 'image'.
+router.post(
+  "/:id/images",
+  authenticate,
+  requireRole("ADMIN"),
+  validateParams(productIdSchema),
+  uploadSingle,
+  asyncHandler(productController.addImage),
+);
+
+router.delete(
+  "/:id/images/:imageId",
+  authenticate,
+  requireRole("ADMIN"),
+  validateParams(productImageParamsSchema),
+  asyncHandler(productController.removeImage),
 );
 
 export default router;

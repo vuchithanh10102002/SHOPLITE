@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { api } from "../helpers/request";
 import { createLoggedInAdmin, createLoggedInUser } from "../helpers/auth";
 import { prisma } from "../../lib/prisma";
+import { cloudinary } from "../../lib/cloudinary"; // da mock o setup.ts
 
 /**
  * KHONG `async`: tra thang chuoi supertest de goi tiep `.expect(...)`.
@@ -439,5 +440,121 @@ describe("Products — cache (version key)", () => {
 
     const res = await api.get("/api/products").expect(200);
     expect(res.body.meta.total).toBe(2);
+  });
+});
+
+// PNG signature 8 byte — du de assertRealImage nhan la anh that.
+const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** Buffer bat dau bang PNG signature, don len `sizeBytes` bang byte 0. */
+function pngBuffer(sizeBytes = PNG_SIG.length): Buffer {
+  if (sizeBytes <= PNG_SIG.length) return PNG_SIG;
+  return Buffer.concat([PNG_SIG, Buffer.alloc(sizeBytes - PNG_SIG.length)]);
+}
+
+describe("Products — upload anh", () => {
+  let adminToken: string;
+  let productId: string;
+
+  beforeEach(async () => {
+    ({ accessToken: adminToken } = await createLoggedInAdmin());
+    const categoryId = await seedCategory(adminToken);
+    const created = await createProduct(adminToken, validBody(categoryId)).expect(201);
+    productId = created.body.data.id;
+  });
+
+  function upload(
+    token: string,
+    buffer: Buffer,
+    filename = "anh.png",
+    contentType = "image/png",
+  ) {
+    return api
+      .post(`/api/products/${productId}/images`)
+      .set("Authorization", `Bearer ${token}`)
+      .attach("image", buffer, { filename, contentType });
+  }
+
+  it("admin upload PNG ~4MB → 201, anh hien trong GET, KHONG lo publicId", async () => {
+    const res = await upload(adminToken, pngBuffer(4 * 1024 * 1024)).expect(201);
+
+    expect(res.body.data).toMatchObject({ url: expect.any(String), sortOrder: 0 });
+    expect(res.body.data).not.toHaveProperty("publicId");
+
+    const detail = await api.get("/api/products/ao-thun-trang").expect(200);
+    expect(detail.body.data.images).toHaveLength(1);
+    expect(detail.body.data.images[0]).not.toHaveProperty("publicId");
+  });
+
+  it("anh > 5MB → 400 UPLOAD_ERROR (multer chan theo size)", async () => {
+    const res = await upload(adminToken, pngBuffer(6 * 1024 * 1024)).expect(400);
+
+    expect(res.body.error.code).toBe("UPLOAD_ERROR");
+  });
+
+  it("file .exe doi ten .png → 400 INVALID_IMAGE, KHONG cham Cloudinary", async () => {
+    const fakeExe = Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03]); // "MZ" = header PE
+
+    const res = await upload(adminToken, fakeExe, "virus.png").expect(400);
+
+    expect(res.body.error.code).toBe("INVALID_IMAGE");
+    // Magic bytes chan TRUOC khi stream len storage.
+    expect(cloudinary.uploader.upload_stream).not.toHaveBeenCalled();
+  });
+
+  it("mimetype khong phai anh → 400 INVALID_IMAGE_TYPE (fileFilter chan som)", async () => {
+    const res = await upload(adminToken, pngBuffer(), "note.txt", "text/plain").expect(400);
+
+    expect(res.body.error.code).toBe("INVALID_IMAGE_TYPE");
+  });
+
+  it("khong gui field 'image' → 400 NO_FILE", async () => {
+    const res = await api
+      .post(`/api/products/${productId}/images`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(400);
+
+    expect(res.body.error.code).toBe("NO_FILE");
+  });
+
+  it("CUSTOMER upload → 403, KHONG doc buffer len Cloudinary", async () => {
+    const { accessToken } = await createLoggedInUser();
+
+    await upload(accessToken, pngBuffer()).expect(403);
+
+    expect(cloudinary.uploader.upload_stream).not.toHaveBeenCalled();
+  });
+
+  it("upload → version bump → detail cache lam moi (anh moi hien ngay)", async () => {
+    await api.get("/api/products/ao-thun-trang").expect(200); // nap cache 0 anh
+
+    await upload(adminToken, pngBuffer()).expect(201);
+
+    const detail = await api.get("/api/products/ao-thun-trang").expect(200);
+    expect(detail.body.data.images).toHaveLength(1);
+  });
+
+  it("xoa anh → destroy(publicId) goi TRUOC, roi row bien mat", async () => {
+    const up = await upload(adminToken, pngBuffer()).expect(201);
+    const imageId = up.body.data.id;
+
+    await api
+      .delete(`/api/products/${productId}/images/${imageId}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(cloudinary.uploader.destroy).toHaveBeenCalledWith("shoplite/products/mock");
+
+    const row = await prisma.productImage.findUnique({ where: { id: imageId } });
+    expect(row).toBeNull();
+  });
+
+  it("xoa anh khong ton tai → 404", async () => {
+    const res = await api
+      .delete(`/api/products/${productId}/images/00000000-0000-4000-8000-000000000000`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(404);
+
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 });

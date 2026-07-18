@@ -29,6 +29,40 @@ vi.mock("../lib/queue", () => ({
   },
 }));
 
+/**
+ * Mock Cloudinary: .env.test co CLOUDINARY_URL=dummy, khong goi mang that duoc,
+ * va cung khong nen (Handbook 5.7: mock Cloudinary, KHONG mock DB).
+ *
+ * upload_stream that tra ve mot Writable; service bom buffer vao roi doi
+ * callback. Mock giu dung hop dong do: tra Writable, khi buffer het (final) thi
+ * goi callback voi secure_url/public_id gia. Test doc lai hai mock fn nay qua
+ * `import { cloudinary }` de assert da/ chua duoc goi.
+ */
+vi.mock("../lib/cloudinary", async () => {
+  const { Writable } = await import("node:stream");
+
+  const upload_stream = vi.fn(
+    (_opts: unknown, cb: (err: unknown, res: unknown) => void) =>
+      new Writable({
+        write(_chunk, _enc, done) {
+          done();
+        },
+        final(done) {
+          cb(null, {
+            secure_url:
+              "https://res.cloudinary.com/demo/image/upload/shoplite/products/mock.png",
+            public_id: "shoplite/products/mock",
+          });
+          done();
+        },
+      }),
+  );
+
+  const destroy = vi.fn(async () => ({ result: "ok" }));
+
+  return { cloudinary: { uploader: { upload_stream, destroy } } };
+});
+
 beforeEach(async () => {
   // Thu tu xoa theo chieu phu thuoc khoa ngoai: con truoc, cha sau.
   await prisma.orderItem.deleteMany();

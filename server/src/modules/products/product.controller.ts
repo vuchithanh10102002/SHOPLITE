@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { productService } from "./product.service";
 import { sendSuccess } from "../../shared/response";
+import { Errors } from "../../shared/errors";
 import { getQuery } from "../../middlewares/validate";
 import { listProductQuerySchema } from "./product.schemas";
 
@@ -46,4 +47,25 @@ async function remove(req: Request, res: Response) {
   sendSuccess(res, await productService.remove(paramId(req)));
 }
 
-export const productController = { list, getBySlug, create, update, remove };
+// multer da nap file vao req.file (memory storage). Khong gui field 'image' →
+// req.file undefined → 400 tu te thay vi vo service roi no bao loi kho hieu.
+async function addImage(req: Request, res: Response) {
+  if (!req.file) throw Errors.badRequest("Thiếu file ảnh (field 'image')", "NO_FILE");
+
+  sendSuccess(res, await productService.addImage(paramId(req), req.file), 201);
+}
+
+// validateParams(productImageParamsSchema) da ep :imageId la uuid.
+async function removeImage(req: Request, res: Response) {
+  sendSuccess(res, await productService.removeImage(paramId(req), req.params.imageId as string));
+}
+
+export const productController = {
+  list,
+  getBySlug,
+  create,
+  update,
+  remove,
+  addImage,
+  removeImage,
+};

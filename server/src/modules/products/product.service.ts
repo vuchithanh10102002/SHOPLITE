@@ -1,14 +1,19 @@
 import { Prisma } from "@prisma/client";
+import { Readable } from "node:stream";
+import type { UploadApiResponse } from "cloudinary";
 import { prisma } from "../../lib/prisma";
+import { cloudinary } from "../../lib/cloudinary";
 import { Errors } from "../../shared/errors";
 import { normalizeText } from "../../shared/slugify";
+import { assertRealImage } from "../../shared/image-magic";
 import { insertWithUniqueSlug } from "../../shared/unique-slug";
 import { PageMeta } from "../../shared/response";
 import { CacheResult, remember, getVersion, bumpVersion } from "../../lib/cache";
 import { CreateProductInput, ListProductQuery, UpdateProductInput } from "./product.schemas";
 
 // `stock` CO trong select (can de tinh stockStatus) nhung KHONG duoc ra khoi
-// service — toPublicProduct() la cai chan.
+// service — toPublicProduct() la cai chan. `publicId` cua anh CUNG khong select
+// o day: no la id noi bo de xoa Cloudinary, khong duoc lo ra public API.
 const productSelect = {
   id: true,
   name: true,
@@ -18,6 +23,10 @@ const productSelect = {
   stock: true,
   createdAt: true,
   category: { select: { id: true, name: true, slug: true } },
+  images: {
+    select: { id: true, url: true, sortOrder: true },
+    orderBy: { sortOrder: "asc" },
+  },
 } satisfies Prisma.ProductSelect;
 
 type ProductRow = Prisma.ProductGetPayload<{ select: typeof productSelect }>;
@@ -46,6 +55,12 @@ const VER_KEY = "products:ver";
 const LIST_TTL = 60;
 const DETAIL_TTL = 60;
 
+export interface PublicImage {
+  id: string;
+  url: string;
+  sortOrder: number;
+}
+
 export interface PublicProduct {
   id: string;
   name: string;
@@ -54,6 +69,7 @@ export interface PublicProduct {
   price: string;
   stockStatus: StockStatus;
   category: { id: string; name: string; slug: string };
+  images: PublicImage[];
   createdAt: Date;
 }
 
@@ -79,6 +95,9 @@ function toPublicProduct(row: ProductRow): PublicProduct {
     price: row.price.toString(),
     stockStatus: stockStatusOf(row.stock),
     category: row.category,
+    // Liet ke tay tung field (id/url/sortOrder) — KHONG tra thang row.images,
+    // vi productSelect co the sau nay them cot (vd publicId) va no se tu lot ra.
+    images: row.images.map((img) => ({ id: img.id, url: img.url, sortOrder: img.sortOrder })),
     createdAt: row.createdAt,
   };
 }
@@ -299,4 +318,81 @@ async function list(
   });
 }
 
-export const productService = { create, update, remove, getBySlug, list };
+/**
+ * Stream buffer len Cloudinary. upload_stream tra ve mot Writable — phai bom
+ * buffer vao roi doi callback, khong co gi await san, nen boc trong Promise.
+ * `resource_type: image` + folder co dinh de anh gom mot cho tren Cloudinary.
+ */
+function uploadToCloudinary(buffer: Buffer): Promise<UploadApiResponse> {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder: "shoplite/products", resource_type: "image" },
+      (err, result) =>
+        err || !result ? reject(err ?? new Error("Cloudinary upload thất bại")) : resolve(result),
+    );
+    Readable.from(buffer).pipe(stream);
+  });
+}
+
+async function addImage(productId: string, file: Express.Multer.File): Promise<PublicImage> {
+  const product = await prisma.product.findFirst({
+    where: { id: productId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!product) throw Errors.notFound("sản phẩm");
+
+  // Lop chan THAT: byte dau file phai dung la anh. Chan TRUOC khi cham
+  // Cloudinary — file gia khong bao gio duoc doc len storage.
+  assertRealImage(file.buffer);
+
+  // sortOrder = so anh dang co → anh moi xep cuoi. Dem thay vi max+1: chua co
+  // tinh nang sap xep lai nen them tuan tu cho cung ket qua, ma don gian hon.
+  const sortOrder = await prisma.productImage.count({ where: { productId } });
+
+  const uploaded = await uploadToCloudinary(file.buffer);
+
+  const image = await prisma.productImage.create({
+    data: {
+      productId,
+      url: uploaded.secure_url,
+      publicId: uploaded.public_id,
+      sortOrder,
+    },
+    select: { id: true, url: true, sortOrder: true },
+  });
+
+  // Anh moi → product doi → cache detail/list cu lac hau. Dung chung version key
+  // voi buoc 3.
+  await bumpVersion(VER_KEY);
+
+  return image;
+}
+
+async function removeImage(productId: string, imageId: string) {
+  const image = await prisma.productImage.findFirst({
+    where: { id: imageId, productId },
+    select: { id: true, publicId: true },
+  });
+  if (!image) throw Errors.notFound("ảnh");
+
+  // Xoa Cloudinary TRUOC, DB sau: neu Cloudinary fail thi DB con giu tham chieu,
+  // khong bo lai anh mo coi tren storage (Handbook 4.6). Thu tu nguoc lai chinh
+  // la cach lam ro ri anh cu day dan Cloudinary.
+  await cloudinary.uploader.destroy(image.publicId);
+
+  await prisma.productImage.delete({ where: { id: image.id } });
+
+  await bumpVersion(VER_KEY);
+
+  return { message: "Đã xóa ảnh" };
+}
+
+export const productService = {
+  create,
+  update,
+  remove,
+  getBySlug,
+  list,
+  addImage,
+  removeImage,
+};

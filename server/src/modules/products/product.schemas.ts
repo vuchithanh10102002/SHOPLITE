@@ -62,6 +62,13 @@ export const productIdSchema = z.object({
   id: z.uuid("id không hợp lệ"),
 });
 
+// Route xoa anh mang CA hai param: /products/:id/images/:imageId. Validate ca
+// hai la uuid truoc khi vao controller.
+export const productImageParamsSchema = z.object({
+  id: z.uuid("id không hợp lệ"),
+  imageId: z.uuid("imageId không hợp lệ"),
+});
+
 /**
  * Khop dung cai ma slugify() sinh ra: chu thuong/so, gach noi ngan GIUA cac
  * cum, khong gach o hai dau, khong gach doi.
