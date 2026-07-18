@@ -3,8 +3,14 @@ import { prisma } from "../../lib/prisma";
 import { Errors } from "../../shared/errors";
 import { PageMeta } from "../../shared/response";
 import { emailQueue } from "../../lib/queue";
+import { restockItems } from "../../shared/restock";
 import { paymentService } from "../payments/payment.service";
-import { CreateOrderInput, ListOrderQuery } from "./order.schemas";
+import { assertTransition } from "./order.state";
+import {
+  CreateOrderInput,
+  ListOrderQuery,
+  ListAdminOrderQuery,
+} from "./order.schemas";
 
 // ---- Public shapes (lo tap con field, khong bao gio ...rest) ----
 
@@ -87,6 +93,14 @@ function toPublicOrder(row: OrderDetailRow): PublicOrder {
       createdAt: row.payment.createdAt,
     },
   };
+}
+
+/** Doc detail theo id (KHONG kiem quyen) → PublicOrder; thieu → 404. Dung sau khi
+ * tao/huy/doi trang thai de tra ve trang thai moi nhat. */
+async function loadDetail(id: string): Promise<PublicOrder> {
+  const row = await prisma.order.findUnique({ where: { id }, select: orderDetailSelect });
+  if (!row) throw Errors.notFound("đơn hàng");
+  return toPublicOrder(row);
 }
 
 // Summary cho list: nhe hon detail, khong keo items/history.
@@ -235,11 +249,7 @@ async function createOrder(
     await emailQueue.add("order-status", { orderId: created.id });
 
     // Doc lai detail de phan anh status cuoi + payment record vua tao trong settle.
-    const settled = await prisma.order.findUnique({
-      where: { id: created.id },
-      select: orderDetailSelect,
-    });
-    return { order: toPublicOrder(settled!), replayed: false };
+    return { order: await loadDetail(created.id), replayed: false };
   } catch (e) {
     // 6. RACE cung idempotency key: 2 request cung vao (ca hai thay "chua ton tai"
     // o buoc 1), 1 thang, 1 vuong UNIQUE(userId, key) → P2002. Con lai roll back
@@ -296,4 +306,158 @@ async function listMyOrders(
   };
 }
 
-export const orderService = { createOrder, getOrderById, listMyOrders };
+/**
+ * Khach HUY don cua chinh minh (BR2/FR-O6). Chi huy duoc khi PENDING/PAID → hoan
+ * kho; SHIPPED/COMPLETED/CANCELLED → 409. Don cua nguoi khac → 404 (IDOR).
+ */
+async function cancelOrder(userId: string, orderId: string): Promise<PublicOrder> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      userId: true,
+      status: true,
+      items: { select: { productId: true, quantity: true } },
+    },
+  });
+  if (!order || order.userId !== userId) throw Errors.notFound("đơn hàng");
+
+  await prisma.$transaction(async (tx) => {
+    // Conditional: chi huy khi con PENDING/PAID. updateMany tra `count` — count===0
+    // nghia la don da SHIPPED/COMPLETED/CANCELLED (BR2: SHIPPED khong huy qua he
+    // thong) HOAC vua bi doi trang thai boi request khac (race) → 409. Chinh dieu
+    // kien `status in` nay chan double-cancel: lan huy thu 2 thay CANCELLED → count 0.
+    const { count } = await tx.order.updateMany({
+      where: { id: orderId, status: { in: [OrderStatus.PENDING, OrderStatus.PAID] } },
+      data: { status: OrderStatus.CANCELLED },
+    });
+    if (count === 0) {
+      throw Errors.conflict("Đơn không thể hủy ở trạng thái hiện tại", "ORDER_NOT_CANCELLABLE");
+    }
+
+    await restockItems(tx, order.items); // BR2: hoan kho khi CANCELLED tu PENDING/PAID
+    await tx.orderStatusHistory.create({
+      data: {
+        orderId,
+        fromStatus: order.status,
+        toStatus: OrderStatus.CANCELLED,
+        reason: "Khách hủy đơn",
+        changedBy: userId,
+      },
+    });
+  });
+
+  return loadDetail(orderId);
+}
+
+/**
+ * ADMIN doi trang thai don theo state machine (FR-O7/UC4). assertTransition (b3)
+ * chan nhay coc → 409. Chuyen sang CANCELLED thi hoan kho (BR2). Ghi history kem
+ * `changedBy = adminId` de phan biet voi khach tu huy.
+ */
+async function adminUpdateStatus(
+  orderId: string,
+  adminId: string,
+  toStatus: OrderStatus,
+): Promise<PublicOrder> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { status: true, items: { select: { productId: true, quantity: true } } },
+  });
+  if (!order) throw Errors.notFound("đơn hàng");
+
+  // Chan buoc chuyen sai TRUOC khi vao tx (409 INVALID_STATUS_TRANSITION).
+  assertTransition(order.status, toStatus);
+
+  await prisma.$transaction(async (tx) => {
+    // Conditional theo `from` da doc: neu trang thai doi giua luc doc va update
+    // (admin khac thao tac song song) → count 0 → 409, khong ghi de mu quang.
+    const { count } = await tx.order.updateMany({
+      where: { id: orderId, status: order.status },
+      data: { status: toStatus },
+    });
+    if (count === 0) {
+      throw Errors.conflict("Trạng thái đơn vừa thay đổi, vui lòng thử lại", "ORDER_STATUS_CHANGED");
+    }
+
+    if (toStatus === OrderStatus.CANCELLED) {
+      await restockItems(tx, order.items); // BR2
+    }
+    await tx.orderStatusHistory.create({
+      data: {
+        orderId,
+        fromStatus: order.status,
+        toStatus,
+        reason: "Admin cập nhật trạng thái",
+        changedBy: adminId,
+      },
+    });
+  });
+
+  return loadDetail(orderId);
+}
+
+// Summary cho admin: kem userId + email de biet don cua ai.
+export interface AdminOrderSummary extends PublicOrderSummary {
+  userId: string;
+  userEmail: string;
+}
+
+const orderAdminSummarySelect = {
+  id: true,
+  userId: true,
+  status: true,
+  totalAmount: true,
+  createdAt: true,
+  user: { select: { email: true } },
+  _count: { select: { items: true } },
+} satisfies Prisma.OrderSelect;
+
+type OrderAdminSummaryRow = Prisma.OrderGetPayload<{ select: typeof orderAdminSummarySelect }>;
+
+function toAdminOrderSummary(row: OrderAdminSummaryRow): AdminOrderSummary {
+  return {
+    id: row.id,
+    userId: row.userId,
+    userEmail: row.user.email,
+    status: row.status,
+    totalAmount: row.totalAmount.toString(),
+    itemCount: row._count.items,
+    createdAt: row.createdAt,
+  };
+}
+
+/** ADMIN: mọi đơn, lọc theo status/userId, phân trang. Index orders(status,created_at). */
+async function adminListOrders(
+  query: ListAdminOrderQuery,
+): Promise<{ data: AdminOrderSummary[]; meta: PageMeta }> {
+  const { page, limit, status, userId } = query;
+  const where: Prisma.OrderWhereInput = {
+    ...(status && { status }),
+    ...(userId && { userId }),
+  };
+
+  const [total, rows] = await Promise.all([
+    prisma.order.count({ where }),
+    prisma.order.findMany({
+      where,
+      select: orderAdminSummarySelect,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+  ]);
+
+  return {
+    data: rows.map(toAdminOrderSummary),
+    meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  };
+}
+
+export const orderService = {
+  createOrder,
+  getOrderById,
+  listMyOrders,
+  cancelOrder,
+  adminUpdateStatus,
+  adminListOrders,
+};

@@ -1,5 +1,6 @@
 import { Prisma, PaymentStatus, OrderStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { restockItems } from "../../shared/restock";
 import { assertTransition } from "../orders/order.state";
 import { paymentProvider, PaymentDeclinedError } from "./payment.provider";
 
@@ -40,11 +41,7 @@ async function settlePayment(order: SettleInput): Promise<void> {
       if (affected === 0) return; // don khong con PENDING → da xu ly, dung ghi de/hoan kho lan 2
 
       // BR2: hoan kho khi CANCELLED tu PENDING. Cong tra dung so da tru o b4.
-      for (const item of order.items) {
-        await tx.$executeRaw`
-          UPDATE products SET stock = stock + ${item.quantity}, updated_at = now()
-          WHERE id = ${item.productId}::uuid`;
-      }
+      await restockItems(tx, order.items);
       await tx.payment.create({
         data: {
           orderId: order.id,
