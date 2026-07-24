@@ -23,7 +23,8 @@ router.get("/", validateQuery(listOrderQuerySchema), asyncHandler(orderControlle
 // GET /api/orders/:id — của tôi hoặc ADMIN; kèm items + timeline.
 router.get("/:id", validateParams(orderIdSchema), asyncHandler(orderController.getById));
 
-// POST /api/orders/:id/cancel — hủy đơn (BR2). Logic ở b6, hiện 501.
+// POST /api/orders/:id/cancel — hủy đơn (BR2): chỉ PENDING/PAID mới hủy được,
+// hủy xong hoàn kho. SHIPPED/COMPLETED/CANCELLED → 409 ORDER_NOT_CANCELLABLE.
 router.post("/:id/cancel", validateParams(orderIdSchema), asyncHandler(orderController.cancel));
 
 export default router;

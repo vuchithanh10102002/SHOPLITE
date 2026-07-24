@@ -94,6 +94,35 @@ describe("Payment finalize (Phase 4 b5)", () => {
     expect(orderStatusJobs(order.id)).toHaveLength(1);
   });
 
+  it("PAYMENT_FAIL_RATE=1: đặt 10 đơn → 10 đơn CANCELLED, kho KHÔNG đổi (DoD Phase 4)", async () => {
+    const ORDERS = 10;
+    const QTY = 2;
+    const STOCK = 10; // co tinh de STOCK < ORDERS*QTY: neu mot don nao do quen hoan kho,
+    // don sau se chet INSUFFICIENT_STOCK → test do ngay, khong im lang.
+    const p1 = await seedProduct(adminToken, categoryId, { stock: STOCK });
+
+    // Tuong duong PAYMENT_FAIL_RATE=1 cho dung 10 lan charge cua test nay. Dung
+    // ...Once xep hang (khong phai mockRejectedValue) de khong ro ri sang test sau —
+    // setup.ts chi clearAllMocks (xoa calls), KHONG reset implementation.
+    const charge = paymentProvider.charge as Mock;
+    for (let i = 0; i < ORDERS; i++) charge.mockRejectedValueOnce(new PaymentDeclinedError());
+
+    const orders = [];
+    for (let i = 0; i < ORDERS; i++) {
+      await addToCart(userToken, p1, QTY).expect(201);
+      const res = await placeOrder(userToken).expect(201);
+      orders.push(res.body.data);
+    }
+
+    for (const o of orders) {
+      expect(o.status).toBe("CANCELLED");
+      expect(o.payment).toMatchObject({ status: "FAILED" });
+    }
+    // Bat bien DoD: sau ca loat that bai, kho ve dung so ban dau.
+    expect(await stockOf(p1)).toBe(STOCK);
+    expect(await prisma.order.count({ where: { status: "CANCELLED" } })).toBe(ORDERS);
+  });
+
   it("thất bại nhiều item → hoàn kho ĐỦ mọi item", async () => {
     const pA = await seedProduct(adminToken, categoryId, { name: "Sản phẩm A", stock: 10 });
     const pB = await seedProduct(adminToken, categoryId, { name: "Sản phẩm B", stock: 8 });

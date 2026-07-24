@@ -1,0 +1,248 @@
+# ShopLite — Cart + Orders + Payment (Phase 4)
+#
+# Cần extension "REST Client" (humao.rest-client) cho VS Code.
+# Bấm "Send Request" ngay phía trên mỗi block.
+#
+# VÌ SAO dùng file .http thay vì curl/PowerShell trên terminal: file này là UTF-8
+# nên tiếng Việt (địa chỉ giao hàng) đi tới server nguyên vẹn. Gõ thẳng
+# `curl -d '{"shippingAddress":"12 Nguyễn Huệ"}'` trong terminal Windows thì shell
+# băm nát UTF-8 TRƯỚC KHI curl kịp gửi → server nhận rác.
+#
+# Chuẩn bị:
+#   docker compose up -d           (ở gốc repo)
+#   npx prisma db seed             (tạo admin@shoplite.dev + cong@webpx.vn)
+#   npm run dev                    (trong server/)
+#
+# LƯU Ý về payment: dev không set PAYMENT_FAIL_RATE → mặc định 0.2, tức ~20% đơn
+# rớt sang CANCELLED (đúng thiết kế, để thấy nhánh hoàn kho). Đặt PAYMENT_FAIL_RATE=0
+# trong .env nếu muốn mọi đơn PAID; =1 nếu muốn dựng lại DoD "10 đơn đều CANCELLED".
+#
+# Chạy các block THEO THỨ TỰ từ trên xuống (block sau dùng biến của block trước).
+
+@baseUrl = http://localhost:3000
+
+### Login customer đã verify → accessToken
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "cong@webpx.vn", "password": "Webpx@2024" }
+
+###
+@token = {{login.response.body.data.accessToken}}
+
+### Login admin (đổi trạng thái đơn ở cuối file)
+# @name loginAdmin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "admin@shoplite.dev", "password": "Webpx@2024" }
+
+###
+@adminToken = {{loginAdmin.response.body.data.accessToken}}
+
+### Login user CHƯA verify (dùng cho BR4 ở cuối file)
+# @name loginUnverified
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "hanh.unverified@gmail.com", "password": "Webpx@2024" }
+
+###
+@unverifiedToken = {{loginUnverified.response.body.data.accessToken}}
+
+
+# ─────────────────────────────────────────────
+# GIỎ HÀNG
+# ─────────────────────────────────────────────
+
+### Lấy 1 sản phẩm còn hàng → copy id vào @productId bên dưới
+# @name products
+GET {{baseUrl}}/api/products?limit=5
+
+###
+@productId = {{products.response.body.data.0.id}}
+
+### Dọn giỏ cho sạch trước khi bắt đầu
+DELETE {{baseUrl}}/api/cart
+Authorization: Bearer {{token}}
+
+### Thêm vào giỏ → 201, trả về full giỏ
+POST {{baseUrl}}/api/cart/items
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "productId": "{{productId}}", "quantity": 2 }
+
+### Thêm LẠI cùng sản phẩm → cộng dồn (quantity 2 → 4), KHÔNG tạo dòng thứ 2
+POST {{baseUrl}}/api/cart/items
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "productId": "{{productId}}", "quantity": 2 }
+
+### Xem giỏ
+# @name cart
+GET {{baseUrl}}/api/cart
+Authorization: Bearer {{token}}
+
+###
+@cartItemId = {{cart.response.body.data.items.0.id}}
+
+### Sửa số lượng về 2
+PATCH {{baseUrl}}/api/cart/items/{{cartItemId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "quantity": 2 }
+
+
+# ─────────────────────────────────────────────
+# ĐẶT HÀNG — tim của Phase 4
+# ─────────────────────────────────────────────
+
+### Đặt hàng → 201. Trả về trạng thái CUỐI (PAID hoặc CANCELLED) vì settle đồng bộ.
+# Idempotency-Key BẮT BUỘC. {{$guid}} = REST Client tự sinh uuid mới mỗi lần gửi.
+# @name createOrder
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{token}}
+Idempotency-Key: {{$guid}}
+
+{ "shippingAddress": "12 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh" }
+
+###
+@orderId = {{createOrder.response.body.data.id}}
+
+### Chi tiết đơn → items (SNAPSHOT tên + giá lúc đặt) + history (timeline) + payment
+GET {{baseUrl}}/api/orders/{{orderId}}
+Authorization: Bearer {{token}}
+
+### Đơn của tôi, phân trang
+GET {{baseUrl}}/api/orders?page=1&limit=10
+Authorization: Bearer {{token}}
+
+
+# ─────────────────────────────────────────────
+# IDEMPOTENCY — gửi 2 lần CÙNG key
+# ─────────────────────────────────────────────
+# Key ở đây là hằng số (KHÔNG phải {{$guid}}) để 2 block dưới dùng chung.
+# Nhớ thêm hàng vào giỏ lại trước khi chạy (đơn trên đã dọn sạch giỏ).
+
+### Thêm hàng lại vào giỏ
+POST {{baseUrl}}/api/cart/items
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "productId": "{{productId}}", "quantity": 1 }
+
+### Lần 1 → 201, tạo đơn mới
+# @name idem1
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{token}}
+Idempotency-Key: 11111111-2222-4333-8444-555555555555
+
+{ "shippingAddress": "12 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh" }
+
+###
+@idemOrderId = {{idem1.response.body.data.id}}
+
+### Lần 2 CÙNG key → 200 (không phải 201), TRÙNG id với lần 1, kho KHÔNG trừ lần nữa
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{token}}
+Idempotency-Key: 11111111-2222-4333-8444-555555555555
+
+{ "shippingAddress": "12 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh" }
+
+
+# ─────────────────────────────────────────────
+# HỦY ĐƠN (BR2) — hoàn kho
+# ─────────────────────────────────────────────
+
+### Hủy đơn PENDING/PAID → 200, status CANCELLED, kho được hoàn
+POST {{baseUrl}}/api/orders/{{idemOrderId}}/cancel
+Authorization: Bearer {{token}}
+
+### Hủy LẦN 2 → 409 ORDER_NOT_CANCELLABLE (chốt chống hoàn kho 2 lần)
+POST {{baseUrl}}/api/orders/{{idemOrderId}}/cancel
+Authorization: Bearer {{token}}
+
+
+# ─────────────────────────────────────────────
+# ADMIN — đổi trạng thái theo state machine
+# ─────────────────────────────────────────────
+
+### Mọi đơn, lọc theo trạng thái
+GET {{baseUrl}}/api/admin/orders?status=PAID&page=1&limit=10
+Authorization: Bearer {{adminToken}}
+
+### PAID → SHIPPED → 200 (chạy trên đơn @orderId ở trên, cần nó đang PAID)
+PATCH {{baseUrl}}/api/admin/orders/{{orderId}}/status
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{ "status": "SHIPPED" }
+
+### SHIPPED → COMPLETED → 200
+PATCH {{baseUrl}}/api/admin/orders/{{orderId}}/status
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{ "status": "COMPLETED" }
+
+### Xem lại timeline → PENDING → PAID → SHIPPED → COMPLETED
+GET {{baseUrl}}/api/orders/{{orderId}}
+Authorization: Bearer {{token}}
+
+
+# ─────────────────────────────────────────────
+# CÁC ĐƯỜNG LỖI — phải trả đúng mã
+# ─────────────────────────────────────────────
+
+### Nhảy cóc trạng thái (COMPLETED là trạng thái cuối) → 409 INVALID_STATUS_TRANSITION
+PATCH {{baseUrl}}/api/admin/orders/{{orderId}}/status
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{ "status": "PAID" }
+
+### Hủy đơn đã SHIPPED/COMPLETED → 409 ORDER_NOT_CANCELLABLE (BR2)
+POST {{baseUrl}}/api/orders/{{orderId}}/cancel
+Authorization: Bearer {{token}}
+
+### BR4 — user chưa verify email đặt hàng → 403 EMAIL_NOT_VERIFIED
+# (khác 403 FORBIDDEN của role: frontend phân biệt "cần xác thực email" vs "không đủ quyền")
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{unverifiedToken}}
+Idempotency-Key: {{$guid}}
+
+{ "shippingAddress": "1 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh" }
+
+### Thiếu header Idempotency-Key → 400 MISSING_IDEMPOTENCY_KEY
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "shippingAddress": "12 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh" }
+
+### Giỏ rỗng → 400 CART_EMPTY
+POST {{baseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{token}}
+Idempotency-Key: {{$guid}}
+
+{ "shippingAddress": "12 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh" }
+
+### Xem đơn của NGƯỜI KHÁC → 404 (IDOR: không lộ ra là đơn có tồn tại)
+GET {{baseUrl}}/api/orders/00000000-0000-4000-8000-000000000000
+Authorization: Bearer {{token}}
+
+### Customer gọi route admin → 403 FORBIDDEN
+GET {{baseUrl}}/api/admin/orders
+Authorization: Bearer {{token}}
+
+### Không token → 401 UNAUTHORIZED
+GET {{baseUrl}}/api/orders
