@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/**
+ * Tailwind v4: theme khai bao bang @theme TRONG CSS, khong con tailwind.config.js.
+ * Roadmap 5.1 viet `npx tailwindcss init -p` — do la cu phap v3, v4 da bo lenh do.
+ * Moi bien o day tu sinh utility class: --color-primary → bg-primary/text-primary/...
+ */
+@theme {
+  /* Xanh la dam — mau chinh cua ShopLite (Roadmap 5.1: primary #065f46). */
+  --color-primary: #065f46;
+  --color-primary-hover: #047857;
+  --color-primary-light: #d1fae5;
+
+  /* Be Vietnam Pro: font Viet du dau, khong bi vo dau nhu font he thong. */
+  --font-sans: "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+
+  /* Focus ring nhat quan toan app — a11y: khong `outline: none` tran lan. */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary;
+  }
+}

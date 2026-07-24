@@ -163,7 +163,22 @@ async function refresh(refreshToken: string) {
     }),
   ]);
 
-  return { accessToken, refreshToken: newRefreshToken };
+  // Tra kem `user` (cung shape voi login): access token song trong MEMORY nen F5 la
+  // mat, frontend phai goi /refresh mot lan luc khoi dong de khoi phuc phien. Neu chi
+  // tra accessToken thi FE con thieu ho ten/role → hoac phai decode JWT o client, hoac
+  // phai them mot round-trip /me. `user` da duoc load san o tren (dong 136) nen dinh
+  // kem KHONG ton them query nao.
+  return {
+    accessToken,
+    refreshToken: newRefreshToken,
+    user: {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      emailVerified: user.emailVerified,
+    },
+  };
 }
 
 async function logout(refreshToken: string | undefined) {

@@ -63,7 +63,7 @@ export async function refresh(req: Request, res: Response, next: NextFunction) {
 
     setRefreshCookie(res, result.refreshToken);
 
-    sendSuccess(res, { accessToken: result.accessToken });
+    sendSuccess(res, { accessToken: result.accessToken, user: result.user });
   } catch (err) {
     // Refresh fail (het han / bi revoke / reuse) → cookie do da vo dung,
     // xoa luon de client khong lap vo han vong 401 → refresh → 401.

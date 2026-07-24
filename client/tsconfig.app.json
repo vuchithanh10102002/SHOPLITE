@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "types": ["vite/client"],
+    "allowArbitraryExtensions": true,
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Alias "@/..." — phai khai o CA HAI noi: vite.config.ts (resolve.alias) de
+       Vite bundle duoc, va o day de `tsc -b` (npm run build) hieu. Thieu ve nay
+       thi dev chay ngon nhung build chet hang loat "Cannot find module '@/...'".
+       KHONG dat `baseUrl`: TS 6 danh dau deprecated (se bo o TS 7) — tu ban 5
+       tro di `paths` tinh theo vi tri file tsconfig nay, khong can baseUrl nua. */
+    "paths": { "@/*": ["./src/*"] },
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"]
+}

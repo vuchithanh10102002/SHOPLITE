@@ -208,7 +208,10 @@ registry.registerPath({
   tags: ["Auth"],
   summary: "Cấp accessToken mới từ refreshToken trong cookie (rotation)",
   responses: {
-    200: { description: "Token mới", ...jsonSchema(ok(z.object({ accessToken: z.string() }))) },
+    200: {
+      description: "Token mới (kèm user để frontend khôi phục phiên sau F5)",
+      ...jsonSchema(ok(z.object({ accessToken: z.string(), user: userSchema }))),
+    },
     ...E401,
   },
 });

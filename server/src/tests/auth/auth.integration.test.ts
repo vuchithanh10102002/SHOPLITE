@@ -195,6 +195,23 @@ describe("POST /api/auth/refresh — rotation", () => {
     expect(tokens[1].familyId).toBe(tokens[0].familyId);
   });
 
+  it("refresh trả kèm user — frontend khôi phục phiên sau F5 bằng 1 request", async () => {
+    const { refreshCookie, email } = await createLoggedInUser();
+
+    const res = await refreshWith(refreshCookie).expect(200);
+
+    // Cung shape voi response cua /login: FE dung chung mot ham setSession().
+    expect(res.body.data.user).toMatchObject({
+      email,
+      role: "CUSTOMER",
+      emailVerified: true,
+    });
+    expect(res.body.data.user.id).toBeTypeOf("string");
+    expect(res.body.data.user.fullName).toBeTypeOf("string");
+    // Khong bao gio lo hash mat khau qua duong nay.
+    expect(res.body.data.user).not.toHaveProperty("passwordHash");
+  });
+
   it("refresh token cũ dùng lại sau khi đã rotate → 401", async () => {
     const { refreshCookie } = await createLoggedInUser();
 
