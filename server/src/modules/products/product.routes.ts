@@ -32,6 +32,17 @@ router.get(
   asyncHandler(productController.listAdmin),
 );
 
+// Detail cho form sua ben admin: theo ID, thay ca hang da xoa, kem `stock`.
+// Hai doan nen khong dam voi "/:slug" (mot doan) — nhung van de canh "/admin" o
+// tren cho ca cum admin nam mot cho.
+router.get(
+  "/admin/:id",
+  authenticate,
+  requireRole("ADMIN"),
+  validateParams(productIdSchema),
+  asyncHandler(productController.getAdminById),
+);
+
 // `/:slug` PHAI dat SAU `/` — neu khong Express van khop dung, nhung de "/" ngay
 // tren cho de doc. GET theo slug (khong phai id) — handbook muc 6.
 router.get(
@@ -64,6 +75,16 @@ router.delete(
   requireRole("ADMIN"),
   validateParams(productIdSchema),
   asyncHandler(productController.remove),
+);
+
+// Khoi phuc hang da soft-delete (DoD Phase 6). Dat truoc "/:id/images" cho de doc;
+// hai path khong dam nhau (khac doan thu hai co dinh).
+router.post(
+  "/:id/restore",
+  authenticate,
+  requireRole("ADMIN"),
+  validateParams(productIdSchema),
+  asyncHandler(productController.restore),
 );
 
 // Upload anh: chi ADMIN. uploadSingle (multer) dat SAU requireRole — dung nhan

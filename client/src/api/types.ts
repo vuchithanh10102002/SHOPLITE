@@ -142,4 +142,66 @@ export interface Order {
   items: OrderItem[];
   history: OrderHistory[];
   payment: Payment | null; // null truoc khi finalize
+  /**
+   * Cac trang thai di tiep duoc TU trang thai hien tai, do BACKEND tinh tu
+   * TRANSITIONS (server/src/modules/orders/order.state.ts).
+   *
+   * Roadmap 6.1 buoc 3 goi y de mot file `shared/orderState.ts` cho ca hai ben
+   * import. Backend da chon duong khac — tra bang API — vi client/ va server/ la
+   * hai project npm roi va Phase 7 build image bang `docker build ./server`, file
+   * o goc repo se nam ngoai build context. Ket qua quan trong hon duong di: FE
+   * KHONG giu mot ban sao nao cua state machine, nen dropdown khong the lech.
+   */
+  allowedTransitions: OrderStatus[];
+}
+
+// ─── Admin ────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/products/admin (list) va GET /api/products/admin/:id (detail).
+ * = Product cong hai field CHI admin thay: `deletedAt` (biet dong nao da xoa) va
+ * `stock` (con so that, de do vao form sua — `stockStatus` khong du).
+ *
+ * LUU Y: POST/PATCH /api/products van tra ve `Product` THUONG (khong stock,
+ * khong deletedAt) — hop dong cu, backend co test khoa lai. Nen sau khi luu form
+ * phai invalidate query admin de doc lai, khong duoc nhet response vao cache
+ * admin (se mat stock).
+ */
+export interface AdminProduct extends Product {
+  deletedAt: string | null;
+  stock: number;
+}
+
+/** GET /api/admin/orders — summary kem chu don + buoc chuyen hop le. */
+export interface AdminOrderSummary extends OrderSummary {
+  userId: string;
+  userEmail: string;
+  allowedTransitions: OrderStatus[];
+}
+
+/** GET /api/admin/users */
+export interface AdminUser {
+  id: string;
+  email: string;
+  fullName: string;
+  role: Role;
+  emailVerified: boolean;
+  isActive: boolean;
+  orderCount: number;
+  createdAt: string;
+}
+
+/** GET /api/admin/dashboard — mot lan goi tra ve ca bon khoi cua man dashboard. */
+export interface DashboardData {
+  summary: {
+    revenueTotal: string; // tien → string (Decimal)
+    orderCount: number;
+    customerCount: number;
+    productCount: number;
+  };
+  /** Du 30 diem lien tiep, ngay khong ban duoc gi van co dong revenue "0". */
+  revenueDaily: { date: string; revenue: string; orders: number }[];
+  topProducts: { productId: string; name: string; quantitySold: number; revenue: string }[];
+  /** Luon du 5 dong — trang thai khong co don nao thi count = 0. */
+  ordersByStatus: { status: OrderStatus; count: number }[];
 }

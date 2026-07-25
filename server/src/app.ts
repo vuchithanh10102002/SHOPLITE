@@ -14,6 +14,8 @@ import productRoutes from "./modules/products/product.routes";
 import cartRoutes from "./modules/cart/cart.routes";
 import orderRoutes from "./modules/orders/order.routes";
 import orderAdminRoutes from "./modules/orders/order.admin.routes";
+import userAdminRoutes from "./modules/users/user.routes";
+import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 import cookieParser from "cookie-parser";
 import swaggerUi from "swagger-ui-express";
 import { openApiDocument } from "./docs/openapi";
@@ -91,6 +93,10 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
 
 app.use("/api/admin/orders", orderAdminRoutes);
+
+app.use("/api/admin/users", userAdminRoutes);
+
+app.use("/api/admin/dashboard", dashboardRoutes);
 
 app.use(notFound);
 

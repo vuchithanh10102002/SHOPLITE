@@ -101,17 +101,27 @@ function toPublicProduct(row: ProductRow): PublicProduct {
 }
 
 /**
- * Chi dung o nhanh admin (?includeDeleted). = public + `deletedAt` de admin biet
- * CAI NAO da xoa; list ma khong phan biet duoc thi vo dung. `deletedAt` co CHU y
- * nam ngoai PublicProduct/toPublicProduct — day la field admin, khong duoc lo ra
- * public API.
+ * Chi dung o nhanh admin (?includeDeleted). = public + `deletedAt` + `stock` de
+ * admin biet CAI NAO da xoa va con bao nhieu hang; list ma khong phan biet duoc
+ * thi vo dung. Ca hai field co CHU y nam ngoai PublicProduct/toPublicProduct —
+ * chung la field admin, khong duoc lo ra public API.
+ *
+ * `stock` (Phase 6): man admin phai hien con so ton kho THAT — `stockStatus`
+ * ("low_stock") du cho nguoi mua nhung khong du de nguoi ban quyet dinh nhap
+ * hang, va form sua san pham can gia tri hien tai de do vao o input, neu khong
+ * moi lan sua ten la stock bi ghi de bang mot con so doan mo.
+ *
+ * Nhac lai gioi han: chi CAC HAM tra AdminProduct moi lo stock. POST/PATCH
+ * /products van tra PublicProduct (co test khoa `not.toHaveProperty("stock")`) —
+ * dung de nguyen the, doi shape o do la pha hop dong da co.
  */
 export interface AdminProduct extends PublicProduct {
   deletedAt: Date | null;
+  stock: number;
 }
 
 function toAdminProduct(row: ProductRow): AdminProduct {
-  return { ...toPublicProduct(row), deletedAt: row.deletedAt };
+  return { ...toPublicProduct(row), deletedAt: row.deletedAt, stock: row.stock };
 }
 
 /** Slug @unique tren toan bang → KHONG loc deletedAt (xem unique-slug.ts). */
@@ -216,6 +226,65 @@ async function remove(id: string) {
 }
 
 /**
+ * Khoi phuc hang da soft-delete (Phase 6 DoD: "tao, sua, soft delete, khoi phuc").
+ * Doi xung voi remove(): chi xoa dau `deletedAt`, khong dung toi gi khac.
+ *
+ * Hai duong tu choi, co chu y phan biet:
+ *  - khong co id → 404 nhu moi cho khac.
+ *  - co nhung dang song → 409, KHONG im lang tra ve "thanh cong". Admin bam
+ *    Khoi phuc mot dong dang song nghia la UI dang hien sai trang thai; nuot di
+ *    thi khong ai biet.
+ *  - danh muc cua no da bi xoa → 409: tha ra thi san pham hien o list public
+ *    nhung khong nam trong cay danh muc nao ca. Bat admin doi danh muc truoc.
+ */
+async function restore(id: string): Promise<AdminProduct> {
+  const product = await prisma.product.findUnique({
+    where: { id },
+    select: { id: true, deletedAt: true, category: { select: { deletedAt: true } } },
+  });
+  if (!product) throw Errors.notFound("sản phẩm");
+  if (product.deletedAt === null) {
+    throw Errors.conflict("Sản phẩm đang hoạt động, không cần khôi phục", "PRODUCT_NOT_DELETED");
+  }
+  if (product.category.deletedAt !== null) {
+    throw Errors.conflict(
+      "Danh mục của sản phẩm đã bị xóa — đổi danh mục trước khi khôi phục",
+      "CATEGORY_UNAVAILABLE",
+    );
+  }
+
+  const restored = await prisma.product.update({
+    where: { id },
+    data: { deletedAt: null },
+    select: productSelect,
+  });
+
+  // San pham quay lai list/detail → cache cu (dang thieu no) lac hau.
+  await bumpVersion(VER_KEY);
+
+  // Tra AdminProduct: nguoi goi la man admin, ho can thay `deletedAt` (gio la null)
+  // de cap nhat dong trong bang ma khong phai fetch lai.
+  return toAdminProduct(restored);
+}
+
+/**
+ * Detail cho man admin: theo ID (khong phai slug), THAY ca hang da xoa, co
+ * `stock`. Man sua san pham can dung ba thu do — `GET /:slug` public khong cho
+ * cai nao: no loc `deletedAt: null` (mo trang sua mot hang da xoa se 404) va
+ * giau stock.
+ *
+ * KHONG cache: admin mo form sua vai lan mot ngay, doi lai form luon doc so ton
+ * kho MOI NHAT. Cache o day nghia la admin sua gia dua tren so lieu cu toi 60s —
+ * dat hon nhieu so voi mot query.
+ */
+async function getByIdAdmin(id: string): Promise<AdminProduct> {
+  const row = await prisma.product.findUnique({ where: { id }, select: productSelect });
+  if (!row) throw Errors.notFound("sản phẩm");
+
+  return toAdminProduct(row);
+}
+
+/**
  * Cache-aside bang version key. Tra kem `hit` de controller ghi cache_hit vao
  * request log — service KHONG dung toi `res`, controller la cho hai the gioi gap.
  *
@@ -280,15 +349,30 @@ function paramsKey(q: ListProductQuery): string {
   ].join("|");
 }
 
+/**
+ * HAI TRUC DOC LAP, dung gop lam mot:
+ *
+ *  - `adminView` = AI hoi. Quyet dinh SHAPE tra ve (AdminProduct co stock/
+ *    deletedAt hay PublicProduct) va NAMESPACE cache.
+ *  - `includeDeleted` = LOC GI. Chi quyet dinh `where`.
+ *
+ * Truoc day chi co mot co `includeDeleted` gánh ca hai viec, va do la mot BUG
+ * that: admin mo bang voi o "hien ca hang da xoa" CHUA tick thi list map bang
+ * toPublicProduct → khong co `stock`/`deletedAt` → man admin doc `deletedAt`
+ * thay `undefined`, `undefined !== null` la TRUE nen MOI dong hien "Da xoa" kem
+ * nut Khoi phuc, con cot ton kho trong tron. Bo loc khong duoc phep doi hop dong
+ * du lieu cua endpoint.
+ */
 async function list(
   query: ListProductQuery,
-  opts?: { includeDeleted?: boolean },
+  opts?: { adminView?: boolean; includeDeleted?: boolean },
 ): Promise<CacheResult<{ data: PublicProduct[]; meta: PageMeta }>> {
   const { q, categoryId, minPrice, maxPrice, sort, page, limit } = query;
 
+  const adminView = opts?.adminView ?? false;
   // Chi nhanh admin moi duoc thay hang da xoa. `deletedAt: undefined` = Prisma bo
   // qua dieu kien (tra ca hang song lan hang xoa); viet spread cho ro y do.
-  const includeDeleted = opts?.includeDeleted ?? false;
+  const includeDeleted = adminView && (opts?.includeDeleted ?? false);
 
   const where: Prisma.ProductWhereInput = {
     ...(!includeDeleted && { deletedAt: null }),
@@ -311,13 +395,13 @@ async function list(
   };
 
   const ver = await getVersion(VER_KEY);
-  // BAY POISONING: view admin (co hang xoa) va view public KHONG BAO GIO duoc
-  // dung chung key — neu khong admin nap "co hang xoa" roi khach hit trung key
-  // do la lo hang da xoa cho khach. Tach bang tien to `adm`. Nhanh key bam theo
-  // `includeDeleted` THAT (khong phai theo route), nen admin goi ?includeDeleted
-  // =false van an dung public key + public data — nhat quan, khong ro ri.
-  const key = includeDeleted
-    ? `products:list:adm:${ver}:${paramsKey(query)}`
+  // BAY POISONING: view admin va view public KHONG BAO GIO duoc dung chung key.
+  // Nhanh key bam theo `adminView`, KHONG theo `includeDeleted` — vi gio ca hai
+  // view deu tra ve shape rieng: neu admin?includeDeleted=false ma dung key public
+  // thi ban AdminProduct (co `stock`!) se nam trong o cache public va duoc phuc vu
+  // cho khach. `includeDeleted` van phai co MAT trong key vi no doi tap dong tra ve.
+  const key = adminView
+    ? `products:list:adm:${includeDeleted}:${ver}:${paramsKey(query)}`
     : `products:list:${ver}:${paramsKey(query)}`;
 
   return remember(key, LIST_TTL, async () => {
@@ -336,9 +420,9 @@ async function list(
     // page vuot so trang → data rong + meta dung, KHONG phai 404. "Trang 999
     // khong co gi" la mot cau tra loi hop le, khong phai loi.
     return {
-      // Nhanh admin gan them `deletedAt`; AdminProduct la sieu tap cua
-      // PublicProduct nen van khop kieu tra ve.
-      data: rows.map(includeDeleted ? toAdminProduct : toPublicProduct),
+      // Shape bam theo NGUOI GOI (`adminView`), khong theo bo loc. AdminProduct
+      // la sieu tap cua PublicProduct nen van khop kieu tra ve.
+      data: rows.map(adminView ? toAdminProduct : toPublicProduct),
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   });
@@ -417,6 +501,8 @@ export const productService = {
   create,
   update,
   remove,
+  restore,
+  getByIdAdmin,
   getBySlug,
   list,
   addImage,

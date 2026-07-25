@@ -6,7 +6,7 @@ import { PageMeta } from "../../shared/response";
 import { emailQueue } from "../../lib/queue";
 import { restockItems } from "../../shared/restock";
 import { paymentService } from "../payments/payment.service";
-import { assertTransition } from "./order.state";
+import { assertTransition, TRANSITIONS } from "./order.state";
 import {
   CreateOrderInput,
   ListOrderQuery,
@@ -45,6 +45,21 @@ export interface PublicOrder {
   items: PublicOrderItem[];
   history: PublicOrderHistory[];
   payment: PublicPayment | null; // null truoc khi finalize; co sau b5
+  /**
+   * Cac trang thai di tiep duoc TU trang thai hien tai — lay thang tu TRANSITIONS
+   * (order.state.ts, nguon chan ly cua BR1).
+   *
+   * Vi sao tra ve thay vi de FE tu giu mot ban sao (Roadmap 6.1 buoc 3 goi y file
+   * shared): client/ va server/ la hai project npm roi, va Phase 7 build image
+   * bang `docker build ./server` — file dung chung o goc repo se nam NGOAI build
+   * context. Tra qua API thi dropdown admin KHONG THE lech voi state machine, du
+   * hai ben deploy lech phien ban.
+   *
+   * Day la thong tin quy tac, khong phai quyen: chan that su van la
+   * assertTransition trong adminUpdateStatus. FE khach hang dung no cho nut "Huy
+   * don" (huy duoc <=> CANCELLED nam trong danh sach nay).
+   */
+  allowedTransitions: OrderStatus[];
 }
 
 // Detail lay ca userId (kiem IDOR) + items + history. userId KHONG lo ra ngoai.
@@ -93,6 +108,9 @@ function toPublicOrder(row: OrderDetailRow): PublicOrder {
       providerTxnId: row.payment.providerTxnId,
       createdAt: row.payment.createdAt,
     },
+    // Copy mang, KHONG tra thang TRANSITIONS[status]: tra tham chieu thi mot cho
+    // nao do lo .push() vao ket qua API la sua luon bang state machine trong bo nho.
+    allowedTransitions: [...TRANSITIONS[row.status]],
   };
 }
 
@@ -397,10 +415,13 @@ async function adminUpdateStatus(
   return loadDetail(orderId);
 }
 
-// Summary cho admin: kem userId + email de biet don cua ai.
+// Summary cho admin: kem userId + email de biet don cua ai, va allowedTransitions
+// de dropdown doi trang thai ngay tren bang chi hien buoc chuyen hop le (Roadmap
+// 6.1 buoc 3) — khong phai mo trang chi tiet moi biet doi duoc sang dau.
 export interface AdminOrderSummary extends PublicOrderSummary {
   userId: string;
   userEmail: string;
+  allowedTransitions: OrderStatus[];
 }
 
 const orderAdminSummarySelect = {
@@ -424,6 +445,7 @@ function toAdminOrderSummary(row: OrderAdminSummaryRow): AdminOrderSummary {
     totalAmount: row.totalAmount.toString(),
     itemCount: row._count.items,
     createdAt: row.createdAt,
+    allowedTransitions: [...TRANSITIONS[row.status]],
   };
 }
 

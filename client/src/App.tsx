@@ -4,6 +4,7 @@ import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/Toaster";
 import { MainLayout } from "@/layouts/MainLayout";
 import { AuthLayout } from "@/layouts/AuthLayout";
+import { AdminLayout } from "@/layouts/AdminLayout";
 import { RequireAuth } from "@/features/auth/RequireAuth";
 import { LoginPage } from "@/features/auth/pages/LoginPage";
 import { RegisterPage } from "@/features/auth/pages/RegisterPage";
@@ -17,6 +18,11 @@ import { CartPage } from "@/features/cart/pages/CartPage";
 import { CheckoutPage } from "@/features/orders/pages/CheckoutPage";
 import { OrdersPage } from "@/features/orders/pages/OrdersPage";
 import { OrderDetailPage } from "@/features/orders/pages/OrderDetailPage";
+import { DashboardPage } from "@/features/admin/dashboard/pages/DashboardPage";
+import { AdminProductsPage } from "@/features/admin/products/pages/AdminProductsPage";
+import { AdminProductFormPage } from "@/features/admin/products/pages/AdminProductFormPage";
+import { AdminOrdersPage } from "@/features/admin/orders/pages/AdminOrdersPage";
+import { AdminUsersPage } from "@/features/admin/users/pages/AdminUsersPage";
 import { NotFound } from "@/pages/NotFound";
 
 /**
@@ -46,8 +52,30 @@ export function App() {
               <Route path="orders/:id" element={<OrderDetailPage />} />
             </Route>
 
-            {/* Khu /admin la Phase 6 — chua co route nen tam roi vao NotFound. */}
             <Route path="*" element={<NotFound />} />
+          </Route>
+
+          {/*
+            Khu quan tri (Phase 6). Nam NGOAI MainLayout: sidebar rieng, khong
+            header mua sam.
+
+            `role="ADMIN"` → sai quyen thi thay trang 403, KHONG bi day ve /login
+            (nguoi dung DA dang nhap roi, day ho ve login la sai thong diep va ho
+            se dang nhap lai vo ich). Nhac lai cho nguoi doc sau: guard nay chi la
+            UX — chan that su nam o requireRole ben backend.
+          */}
+          <Route element={<RequireAuth role="ADMIN" />}>
+            <Route path="admin" element={<AdminLayout />}>
+              <Route index element={<DashboardPage />} />
+              <Route path="products" element={<AdminProductsPage />} />
+              {/* "new" PHAI dat TREN ":id/edit"? Khong — hai path khac hinh dang
+                  (mot doan vs ba doan) nen khong dam nhau. Giu canh nhau cho de doc. */}
+              <Route path="products/new" element={<AdminProductFormPage />} />
+              <Route path="products/:id/edit" element={<AdminProductFormPage />} />
+              <Route path="orders" element={<AdminOrdersPage />} />
+              <Route path="users" element={<AdminUsersPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Route>
           </Route>
 
           <Route element={<AuthLayout />}>

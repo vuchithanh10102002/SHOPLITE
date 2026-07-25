@@ -20,17 +20,27 @@ async function list(_req: Request, res: Response) {
   sendSuccess(res, value.data, 200, value.meta);
 }
 
-// Nhu list() nhung route da qua requireRole("ADMIN"), va TRUYEN co includeDeleted
-// xuong service — day la CHO DUY NHAT co honor no. Route public goi list() khong
-// truyen opts nen flag khach gui len bi lo di (chong leo quyen + poison cache).
+// Nhu list() nhung route da qua requireRole("ADMIN"). Day la CHO DUY NHAT bat
+// `adminView` — no vua chon shape AdminProduct (co stock/deletedAt cho bang admin
+// dung) vua tach namespace cache — va cung la cho duy nhat honor `includeDeleted`.
+// Route public goi list() khong truyen opts nen ca hai co khach gui len deu bi lo
+// di (chong leo quyen + poison cache).
 async function listAdmin(_req: Request, res: Response) {
   const query = getQuery(res, listProductQuerySchema);
   const { value, hit } = await productService.list(query, {
+    adminView: true,
     includeDeleted: query.includeDeleted,
   });
   res.locals.cacheHit = hit;
 
   sendSuccess(res, value.data, 200, value.meta);
+}
+
+// Detail cho form sua ben admin: theo ID, thay ca hang da xoa, co `stock`.
+// Route da qua requireRole("ADMIN") — day la CHO DUY NHAT tra ve mot san pham
+// kem con so ton kho.
+async function getAdminById(req: Request, res: Response) {
+  sendSuccess(res, await productService.getByIdAdmin(req.params.id as string));
 }
 
 // validateParams(productSlugSchema) da ep :slug khop SLUG_PATTERN → chac chan la
@@ -60,6 +70,13 @@ async function remove(req: Request, res: Response) {
   sendSuccess(res, await productService.remove(paramId(req)));
 }
 
+// POST (khong phai PATCH /:id): "khoi phuc" la mot HANH DONG tren san pham chu
+// khong phai sua field — client khong duoc gui `deletedAt` tuy y. Cung khuon voi
+// POST /orders/:id/cancel.
+async function restore(req: Request, res: Response) {
+  sendSuccess(res, await productService.restore(paramId(req)));
+}
+
 // multer da nap file vao req.file (memory storage). Khong gui field 'image' →
 // req.file undefined → 400 tu te thay vi vo service roi no bao loi kho hieu.
 async function addImage(req: Request, res: Response) {
@@ -76,10 +93,12 @@ async function removeImage(req: Request, res: Response) {
 export const productController = {
   list,
   listAdmin,
+  getAdminById,
   getBySlug,
   create,
   update,
   remove,
+  restore,
   addImage,
   removeImage,
 };
