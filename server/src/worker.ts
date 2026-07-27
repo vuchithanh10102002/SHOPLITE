@@ -5,11 +5,17 @@ import {
 } from "./modules/orders/order.maintenance";
 import { prisma } from "./lib/prisma";
 import { redisConnection } from "./lib/redis";
+import { startHeartbeat } from "./lib/worker-heartbeat";
 import logger from "./lib/logger";
 
 const emailWorker = createEmailWorker();
 
 const orderMaintenanceWorker = createOrderMaintenanceWorker();
+
+// Nhip tim cho HEALTHCHECK cua container. Worker khong mo port nao nen day la
+// duong duy nhat de ben ngoai biet no con song — chi tiet trong
+// lib/worker-heartbeat.ts.
+const stopHeartbeat = startHeartbeat(redisConnection);
 
 // Dang ky lich quet don PENDING treo (idempotent — restart khong tao lich trung).
 void scheduleStaleOrderSweep()
@@ -31,6 +37,10 @@ async function shutdown(signal: string) {
   logger.info({ signal }, "Worker shutting down...");
 
   try {
+    // Dung nhip TRUOC khi dong Redis: con interval ma ket noi da quit thi moi
+    // 15 giay lai them mot loi vo nghia trong log luc tat may.
+    stopHeartbeat();
+
     await emailWorker.close();
     await orderMaintenanceWorker.close();
 

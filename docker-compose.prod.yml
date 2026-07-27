@@ -111,18 +111,37 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       REDIS_URL: redis://redis:6379
 
-    # ═══ PHAI TAT healthcheck, khong phai "khong khai bao" ═══
+    # ═══ Healthcheck rieng — PHAI ghi de, va PHAI la mot phep kiem that ═══
     # Worker dung CHUNG image voi api, ma image do co san HEALTHCHECK trong
     # Dockerfile (wget localhost:3000/health). Khong khai bao gi o day = KE THUA
     # cai do — worker khong mo port nao nen tham do luon that bai → container
-    # unhealthy vinh vien du worker chay dung, va `up -d --wait` trong deploy.sh
-    # dung lai voi "container shoplite-worker-prod is unhealthy". Da dinh that.
-    # `disable: true` la cach duy nhat go HEALTHCHECK ke thua tu image.
+    # unhealthy vinh vien du worker chay dung. Da dinh that o Phase 7.
     #
-    # Worker song/chet xem bang `docker compose logs worker` — hoac Phase 8 se
-    # cho no ghi heartbeat vao Redis roi tham do bang do.
+    # Ban va dau tien la `disable: true`. No go duoc HEALTHCHECK ke thua, nhung
+    # DOI MOT LOI LAY MOT LOI KHAC — lo ra tren Codespaces (2026-07-27):
+    #
+    #   container shoplite-worker-prod has no healthcheck configured
+    #   EXIT=1
+    #
+    # `docker compose up -d --wait` TU CHOI ca stack neu co container nao khong
+    # khai bao healthcheck. Ban compose trong Docker Desktop o may dev de cho
+    # qua, ban trong Codespaces thi khong — nen Phase 7 chay duoc ma codespace
+    # dau tien thi deploy.sh chet ngang o buoc cuoi, keo theo seed khong bao gio
+    # chay: demo mo ra la mot cua hang trong.
+    #
+    # Gio worker ghi nhip tim vao Redis (src/lib/worker-heartbeat.ts) va script
+    # nay doc lai. No chung minh worker CON SONG va CON NOI DUOC Redis — ma noi
+    # duoc Redis la toan bo cong viec cua worker. Da can nhac va BAC phep kiem
+    # "tien trinh PID 1 con chay khong": container con chay thi no gan nhu luon
+    # dung, tuc la mot phep kiem khong noi len dieu gi.
     healthcheck:
-      disable: true
+      test: ["CMD", "node", "dist/worker-healthcheck.js"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      # Worker ghi nhip dau tien ngay khi Redis noi duoc, nhung van cho no thoi
+      # gian nap Prisma Client + dang ky lich BullMQ.
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
