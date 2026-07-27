@@ -1,0 +1,13 @@
+# Moi file .sh PHAI luu bang LF trong repo, du may lam viec la Windows va
+# core.autocrlf dang bat. Neu mot script bi commit lai voi CRLF thi tren Linux
+# (Codespaces, container, VPS) bash se doc ky tu \r nhu mot phan cua lenh va bao
+# `$'\r': command not found` — loi rat kho doan vi noi dung file nhin van dung.
+# Cung ho voi bay chmod +x: script viet o Windows, chay o Linux.
+*.sh text eol=lf
+
+# Cung ly do: file trong .devcontainer va cac file cau hinh se duoc doc boi
+# cong cu chay tren Linux.
+.devcontainer/** text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
