@@ -1,0 +1,185 @@
+# GitHub Actions CI (Roadmap 7.1 buoc 4).
+#
+# ═══ LECH ROADMAP CO CHU Y: BA job chu khong phai HAI ═══
+# Roadmap viet "2 jobs: test + build-and-push". Nhung `server/` va `client/` la
+# HAI project npm roi (hai package-lock, hai node_modules, hai toolchain) —
+# nhet chung vao mot job la bat chung xep hang: `npm ci` cua client phai doi
+# toan bo suite test server chay xong. Tach ra thi hai job chay SONG SONG va
+# khi do thi biet ngay hong o phia nao ma khong phai mo log.
+#   server   prisma generate → migrate → typecheck → 237 test (can postgres+redis)
+#   client   oxlint → tsc -b → vite build (khong can service nao)
+#   publish  chi chay khi CA HAI xanh VA la push vao main
+#
+# Trigger: push main + moi pull request. Khong chay tren push cua nhanh khac de
+# khoi ton phut CI hai lan cho cung mot commit (nhanh nao roi cung mo PR).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Push lien tuc vao mot PR: huy lan chay cu, chi giu lan moi nhat.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Job 1: backend ────────────────────────────────────────────────────────
+  server:
+    name: Server — typecheck + test
+    runs-on: ubuntu-latest
+
+    # Gia tri o day PHAI khop `server/.env.test` (file duoc track co y, xem
+    # .gitignore): postgres/postgres @ localhost:5432, db shoplite_test, redis db 1.
+    # Khop duoc thi CI khong can ghi de bien nao — chay y het may dev.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: shoplite_test
+        ports: ["5432:5432"]
+        # Thieu health-* thi service duoc coi la san sang ngay khi container
+        # START, trong khi postgres con dang initdb → test chet chop nhoang
+        # kieu "Can't reach database server" (bay 7.2).
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # node 24 = phien ban trong Dockerfile va tren may dev. CI chay khac
+          # phien ban voi prod la cach de co "xanh o CI, chet o prod".
+          node-version: "24"
+          cache: npm
+          # setup-node mac dinh tim package-lock.json o GOC repo — o day khong co.
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+
+      # Prisma Client la code SINH RA, khong nam trong node_modules san. Thieu
+      # buoc nay thi tsc do ngay dong `import { PrismaClient }`.
+      - run: npx prisma generate
+
+      # global-setup.ts cung chay `migrate deploy`, nhung goi thang o day de khi
+      # migration hong thi CI bao "buoc migrate do" thay vi chon loi trong log test.
+      - name: Prisma migrate deploy
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shoplite_test
+
+      # `npm run build` (tsc co emit) cung bat loi type, nhung --noEmit nhanh hon
+      # va khong de lai dist/ rac trong runner.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # test:run = `vitest run` (khong watch). `npm test` la vitest watch — dat
+      # vao CI se treo den luc het gio.
+      - name: Test
+        run: npm run test:run
+
+  # ─── Job 2: frontend ───────────────────────────────────────────────────────
+  client:
+    name: Client — lint + build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: client
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - run: npm ci
+
+      # oxlint, khong phai eslint (chot tu Phase 5).
+      - name: Lint
+        run: npm run lint
+
+      # `npm run build` = `tsc -b && vite build` → da bao gom typecheck.
+      - name: Build
+        run: npm run build
+
+  # ─── Job 3: build + push image len GHCR ────────────────────────────────────
+  publish:
+    name: Build & push images
+    needs: [server, client]
+    # Chi push vao main moi day image. PR chi can biet code xanh; build image cho
+    # moi PR vua ton phut vua rac registry.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write # bat buoc de GITHUB_TOKEN duoc quyen push len ghcr.io
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ═══ BAY: GHCR CHI NHAN TEN VIET THUONG ═══
+      # Repo nay ten `vuchithanh10102002/SHOPLITE` (co chu HOA). Dung thang
+      # `ghcr.io/${{ github.repository }}` se hong voi "invalid reference format:
+      # repository name must be lowercase". Ha chu o day mot lan roi dung lai.
+      - name: Tinh ten image (viet thuong)
+        id: img
+        run: echo "prefix=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }} # token co san, khong phai tao secret
+
+      # Hai tag moi image: `latest` (deploy.sh --pull keo cai nay) va SHA commit
+      # (de rollback ve dung ban dang chay khi prod hong).
+      - name: Push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          push: true
+          tags: |
+            ${{ steps.img.outputs.prefix }}/api:latest
+            ${{ steps.img.outputs.prefix }}/api:${{ github.sha }}
+          # Cache layer giua cac lan chay — khong co thi moi lan push deu `npm ci`
+          # lai tu dau.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./client
+          push: true
+          tags: |
+            ${{ steps.img.outputs.prefix }}/web:latest
+            ${{ steps.img.outputs.prefix }}/web:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

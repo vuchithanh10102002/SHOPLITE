@@ -523,7 +523,11 @@ async function main(): Promise<void> {
       await prisma.productImage.create({
         data: {
           productId: product.id,
-          url:       `${PLACEHOLDER_BASE}/${p.slug}-${i}/600/400`,
+          // 400x400 (VUÔNG) chứ không phải 600x400: thẻ sản phẩm ngoài giao diện
+          // là khung `aspect-square` + `object-cover`, nên ảnh 600x400 vừa tải
+          // nhiều byte hơn vừa bị cắt bớt hai bên. Lighthouse (Phase 7 bước 5)
+          // chỉ đúng chỗ này: "Improve image delivery — est savings 169 KiB".
+          url:       `${PLACEHOLDER_BASE}/${p.slug}-${i}/400/400`,
           publicId:  `shoplite/seed/${p.slug}-${i}`,  // placeholder, không có trên Cloudinary thật
           sortOrder: i,
         },

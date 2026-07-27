@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* @font-face cua Be Vietnam Pro (self-host). PHAI dat cung khu @import o dau
+   file — CSS khong cho @import xuong duoi rule khac. */
+@import "./styles/fonts.css";
 
 /**
  * Tailwind v4: theme khai bao bang @theme TRONG CSS, khong con tailwind.config.js.

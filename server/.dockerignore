@@ -1,0 +1,27 @@
+# Thu KHONG duoc di vao build context.
+#
+# Khong chi de image nho: moi file o day deu duoc gui sang Docker daemon truoc
+# khi build bat dau, va bat ky thay doi nao trong context deu LAM HONG layer
+# cache. node_modules cua Windows lot vao context la vua cham vua sai (binary
+# native build cho win32 se de len binary linux cua stage build).
+
+node_modules
+dist
+
+# BI MAT. .env khong bao gio duoc bake vao image — bien moi truong dua vao luc
+# CHAY (docker run --env-file / compose env_file). Image la thu duoc push len
+# registry; ai keo ve cung doc duoc moi layer.
+.env
+.env.*
+!.env.example
+
+# Test + do choi dev: khong can trong image production, va keo theo ca DB test.
+src/tests
+vitest.config.ts
+requests
+
+# Rac
+*.log
+.DS_Store
+coverage
+.vscode

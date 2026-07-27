@@ -5,8 +5,6 @@ import { httpLogger } from "./lib/httpLogger";
 import { requestId } from "./middlewares/requestId";
 import { errorHandler } from "./middlewares/errorHandler";
 import { notFound } from "./middlewares/notFound";
-import { validate } from "./middlewares/validate";
-import { z } from "zod";
 import healthRouter from "./routes/health";
 import authRoutes from "./modules/auth/auth.routes";
 import categoryRoutes from "./modules/categories/category.routes";
@@ -66,20 +64,6 @@ app.use(
   },
   swaggerUi.serve,
   swaggerUi.setup(openApiDocument, { customSiteTitle: "ShopLite API" }),
-);
-
-const schema = z.object({
-    name: z.string(),
-});
-
-app.post(
-    "/debug/echo",
-    validate(schema),
-    (req, res) => {
-
-        res.json(req.body);
-
-    }
 );
 
 app.use("/api/auth", authRoutes);

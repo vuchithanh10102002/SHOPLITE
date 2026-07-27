@@ -1,0 +1,17 @@
+# Lighthouse bao "robots.txt is not valid" khi CHUA co file nay — vi SPA fallback
+# cua nginx (try_files ... /index.html) tra ve HTML cho /robots.txt, va bot doc
+# HTML do nhu robots.txt roi bao "Syntax not understood" tung dong.
+#
+# File nam trong public/ nen Vite copy nguyen ve goc dist/, khong bam hash ten
+# (dung vay: dia chi /robots.txt la co dinh theo chuan).
+
+User-agent: *
+Allow: /
+
+# Cac duong dan can dang nhap — khong co gi cho bot o day, va de bot bo qua thi
+# no khong ton lan bo cho nhung URL chi tra ve trang 403/redirect.
+Disallow: /admin
+Disallow: /cart
+Disallow: /checkout
+Disallow: /orders
+Disallow: /account

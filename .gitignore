@@ -1,0 +1,32 @@
+# .gitignore o GOC repo. Truoc day file nay RONG 0 byte — client/ va server/ moi
+# co .gitignore rieng, nen moi thu sinh ra o goc deu tro thanh "untracked file"
+# cho commit. Phase 7 them `.env` o goc (bien cho docker-compose.prod.yml) nen
+# khoang trong nay thanh nguy hiem thuc su: file do chua mat khau DB, JWT secret,
+# creds Cloudinary + SMTP that.
+
+# ─── Bien moi truong ────────────────────────────────────────────────────────
+# Chi khop file TEN DUNG `.env` (o goc va o moi thu muc con) — KHONG khop
+# `.env.test` (dang duoc track co y: no toan gia tri gia, de CI/may moi chay test
+# ngay) va KHONG khop `.env.prod.example` (mau phai commit).
+.env
+.env.local
+.env.*.local
+
+# ─── Node ───────────────────────────────────────────────────────────────────
+node_modules/
+
+# ─── Ket qua build ──────────────────────────────────────────────────────────
+dist/
+build/
+coverage/
+
+# ─── Log ────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ─── Rac cua OS / editor ────────────────────────────────────────────────────
+Thumbs.db
+Desktop.ini
+.DS_Store
+.idea/
+*.swp

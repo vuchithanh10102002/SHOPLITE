@@ -1,0 +1,14 @@
+# Xem giai thich day du o server/.dockerignore: moi file trong context deu duoc
+# gui sang Docker daemon va lam hong layer cache khi doi.
+node_modules
+dist
+
+# .env cua Vite dac biet nguy hiem: bien VITE_* duoc BAKE VAO BUNDLE, tuc la ai
+# mo DevTools cung doc duoc. Khong de file .env nao lot vao build context.
+.env
+.env.*
+
+*.log
+.DS_Store
+.vscode
+README.md

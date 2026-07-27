@@ -1,0 +1,173 @@
+# Toan bo stack production (Roadmap 7.1 buoc 3).
+#
+# Khac docker-compose.yml (dev) o cho: dev CHI chay ha tang (postgres+redis) con
+# code chay tren may bang tsx; o day MOI THU nam trong container.
+#
+#   web       nginx — file tinh cua FE + proxy /api sang api. CUA DUY NHAT ra ngoai.
+#   api       Express, KHONG mo port ra host
+#   worker    CUNG image voi api, khac `command` — chay BullMQ, khong nhan HTTP
+#   postgres  co volume rieng (pgdata-prod), KHONG dung chung volume voi dev
+#   redis     co AOF de job trong queue song qua restart
+#   migrate   one-off, nam trong profile "tools" → `up -d` KHONG chay no
+#
+# Bien moi truong doc tu file `.env` NGANG CAP file nay (xem .env.prod.example).
+#
+# Chay:  docker compose -f docker-compose.prod.yml up -d --build
+# Deploy: ./deploy.sh  (co buoc migrate dung thu tu)
+
+services:
+  web:
+    build:
+      context: ./client
+    image: shoplite-web:latest
+    container_name: shoplite-web-prod
+    restart: unless-stopped
+
+    # Chi service nay mo port. HTTP_PORT de doi sang 8080 khi may da co gi o 80
+    # (Phase 8 se dat certbot/nginx-proxy dung 80/443 o tren).
+    ports:
+      - "${HTTP_PORT:-80}:80"
+
+    # `service_healthy` chu khong phai `service_started`: nginx.conf co
+    # `proxy_pass http://api:3000` — nginx PHAN GIAI ten `api` LUC NAP CONFIG,
+    # ten chua ton tai thi nginx chet ngay khi khoi dong (host not found in
+    # upstream). Cho api healthy la cach chac chan nhat.
+    depends_on:
+      api:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./server
+    image: shoplite-api:latest
+    container_name: shoplite-api-prod
+    restart: unless-stopped
+
+    # KHONG co `ports:` — API chi cho phep vao qua nginx. Mo 3000 ra host la mo
+    # duong di tat, bo qua moi thu nginx dang lam (gzip, cache, rate limit sau nay).
+    # Debug thi dung `docker compose -f docker-compose.prod.yml exec api sh`.
+
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Ghi de host: trong mang compose, DB/Redis mang ten SERVICE, khong phai
+      # localhost. De .env cua may dev lot vao day la loi "connect ECONNREFUSED
+      # 127.0.0.1:5432" kinh dien.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      REDIS_URL: redis://redis:6379
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    # Dung LAI image cua api (khong build lan hai): cung code, cung deps.
+    build:
+      context: ./server
+    image: shoplite-api:latest
+    container_name: shoplite-worker-prod
+    restart: unless-stopped
+
+    command: ["node", "dist/worker.js"]
+
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      REDIS_URL: redis://redis:6379
+
+    # ═══ PHAI TAT healthcheck, khong phai "khong khai bao" ═══
+    # Worker dung CHUNG image voi api, ma image do co san HEALTHCHECK trong
+    # Dockerfile (wget localhost:3000/health). Khong khai bao gi o day = KE THUA
+    # cai do — worker khong mo port nao nen tham do luon that bai → container
+    # unhealthy vinh vien du worker chay dung, va `up -d --wait` trong deploy.sh
+    # dung lai voi "container shoplite-worker-prod is unhealthy". Da dinh that.
+    # `disable: true` la cach duy nhat go HEALTHCHECK ke thua tu image.
+    #
+    # Worker song/chet xem bang `docker compose logs worker` — hoac Phase 8 se
+    # cho no ghi heartbeat vao Redis roi tham do bang do.
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ─── one-off: prisma migrate deploy ────────────────────────────────────────
+  # `profiles` khien service nay BI BO QUA boi `up -d`. Goi tay:
+  #   docker compose -f docker-compose.prod.yml run --rm migrate
+  #
+  # Dung stage `migrator` cua server/Dockerfile — image co prisma CLI. Image
+  # `api` KHONG co CLI (co y de: nho hon 148MB va khong mang cong cu sua schema
+  # vao container dang phuc vu HTTP) nen lenh trong Roadmap 7.1 buoc 3
+  # (`compose run --rm api npx prisma migrate deploy`) se KHONG chay duoc — dung
+  # service nay thay the.
+  migrate:
+    build:
+      context: ./server
+      target: migrator
+    image: shoplite-migrator:latest
+    profiles: ["tools"]
+
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: shoplite-postgres-prod
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    # KHONG mo 5432 ra host. Muon chay psql: `compose exec postgres psql -U ...`.
+    # Postgres mo ra Internet voi mat khau yeu la cach bi chiem may nhanh nhat.
+
+    volumes:
+      - pgdata-prod:/var/lib/postgresql/data
+
+    healthcheck:
+      # -U ${POSTGRES_USER}: pg_isready khong co user dung se bao "no attribute"
+      # roi bao healthy sai.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      # DB lan dau khoi tao (initdb) mat ~5–10s. start_period cho no thoi gian do
+      # ma khong tinh la lan retry that bai.
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    container_name: shoplite-redis-prod
+    restart: unless-stopped
+
+    # appendonly: job BullMQ nam trong Redis. Mac dinh redis chi snapshot dinh ky
+    # → restart giua luc dong job = mat job (don da tao nhung email khong bao gio
+    # gui). AOF ghi tung lenh nen mat toi da 1 giay.
+    command: ["redis-server", "--appendonly", "yes"]
+
+    volumes:
+      - redisdata-prod:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  # Ten co hau to -prod: KHONG duoc dung chung volume voi compose dev, khong thi
+  # `docker compose down -v` ben dev xoa luon DB prod.
+  pgdata-prod:
+  redisdata-prod:
