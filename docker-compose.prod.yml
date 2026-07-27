@@ -15,6 +15,35 @@
 # Chay:  docker compose -f docker-compose.prod.yml up -d --build
 # Deploy: ./deploy.sh  (co buoc migrate dung thu tu)
 
+# ═══ `name` — KHONG duoc bo dong nay ═══
+# Compose lay ten project tu TEN THU MUC neu khong khai bao. Ca hai file compose
+# (dev va prod) deu nam trong thu muc `shoplite`, va ca hai deu co service ten
+# `postgres`/`redis` → chung project + trung ten service = `docker compose up -d`
+# ben dev DUNG LAI cho cua prod, tuc la thay luon container postgres/redis cua
+# prod bang ban dev.
+#
+# DA DINH THAT (2026-07-27): sau khi bat ha tang dev de chay test, `api-prod` van
+# bao healthy — vi HEALTHCHECK trong image chi tham `/health` (song chua), khong
+# tham `/health/ready` (DB/Redis con khong) — trong khi that ra no dang noi
+# chuyen voi Postgres cua DEV qua cung mot alias mang `postgres`. Chi
+# `/health/ready` lo ra: {"ok":false}.
+#
+# Dat ten project rieng thi hai stack co mang rieng, khong con thay nhau.
+name: shoplite-prod
+
+# ═══ Gioi han log — Roadmap 8.2 "Docker log day dia" ═══
+# Mac dinh driver json-file KHONG xoay vong: file log lon vo han cho toi khi day
+# dia, va khi dia day thi Postgres chet chu khong phai container nao it quan
+# trong. 10m x 5 = toi da 50MB moi container.
+#
+# Anchor YAML (`&`/`*`) de khoi chep 5 lan; compose ho tro san, khong can cong cu
+# ngoai. Doi mot cho la doi ca 5 service.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   web:
     build:
@@ -22,6 +51,7 @@ services:
     image: shoplite-web:latest
     container_name: shoplite-web-prod
     restart: unless-stopped
+    logging: *default-logging
 
     # Chi service nay mo port. HTTP_PORT de doi sang 8080 khi may da co gi o 80
     # (Phase 8 se dat certbot/nginx-proxy dung 80/443 o tren).
@@ -42,6 +72,7 @@ services:
     image: shoplite-api:latest
     container_name: shoplite-api-prod
     restart: unless-stopped
+    logging: *default-logging
 
     # KHONG co `ports:` — API chi cho phep vao qua nginx. Mo 3000 ra host la mo
     # duong di tat, bo qua moi thu nginx dang lam (gzip, cache, rate limit sau nay).
@@ -70,6 +101,7 @@ services:
     image: shoplite-api:latest
     container_name: shoplite-worker-prod
     restart: unless-stopped
+    logging: *default-logging
 
     command: ["node", "dist/worker.js"]
 
@@ -124,6 +156,7 @@ services:
     image: postgres:16-alpine
     container_name: shoplite-postgres-prod
     restart: unless-stopped
+    logging: *default-logging
 
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -151,6 +184,7 @@ services:
     image: redis:7-alpine
     container_name: shoplite-redis-prod
     restart: unless-stopped
+    logging: *default-logging
 
     # appendonly: job BullMQ nam trong Redis. Mac dinh redis chi snapshot dinh ky
     # → restart giua luc dong job = mat job (don da tao nhung email khong bao gio
@@ -169,5 +203,13 @@ services:
 volumes:
   # Ten co hau to -prod: KHONG duoc dung chung volume voi compose dev, khong thi
   # `docker compose down -v` ben dev xoa luon DB prod.
+  #
+  # `name:` dat TAY (khong de compose tu them tien to project): ten mac dinh la
+  # <project>_<volume>, ma project lai lay theo TEN THU MUC — clone repo vao
+  # /home/deploy/shoplite-app tren VPS la ra bo volume KHAC, DB khoi dong rong
+  # tron trong khi du lieu cu van nam day duoi mot cai ten khac. Dat ten tuong
+  # minh thi doi thu muc/doi ten project deu khong lam mat du lieu.
   pgdata-prod:
+    name: shoplite_pgdata-prod
   redisdata-prod:
+    name: shoplite_redisdata-prod

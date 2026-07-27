@@ -1,0 +1,71 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// Demo ShopLite tren GitHub Codespaces (Phase 8, ban thay the huong VPS).
+//
+// Vi sao Codespaces: Oracle Cloud Always Free / Railway / Fly.io deu bat xac
+// minh THE TIN DUNG. Codespaces free 120 core-hours/thang khong can the, va cap
+// san mot URL HTTPS that (https://<ten-codespace>-8080.app.github.dev) nen
+// khong can ten mien, khong can certbot.
+//
+// Kien truc KHONG phai sua gi de chay duoc o day: moi thu di qua MOT cong nginx
+// (`/api` proxy sang api) → FE va API cung origin → cookie httpOnly refreshToken
+// van di ve binh thuong, khong dinh CORS/SameSite.
+//
+// ═══ BA RANG BUOC PHAI NHO ═══
+// 1. Cong forward mac dinh la PRIVATE. Nguoi ngoai mo link se dinh man hinh
+//    dang nhap GitHub chu khong thay ShopLite. Phai doi sang PUBLIC —
+//    setup.sh thu doi bang `gh`, that bai thi in huong dan doi tay.
+//
+//    KHONG dat duoc trong file nay: `portsAttributes` cua devcontainer chi ho
+//    tro `label` / `onAutoForward` / `protocol`... — de nghi them `visibility`
+//    van chua duoc implement (community discussion #10394, kiem lai 2026-07-27).
+//    Da co y KHONG viet `"visibility": "public"` vao day: no se bi lo di trong
+//    im lang, dung kieu bay "cau hinh khong co tac dung" ma project nay ne.
+//
+// 2. URL DOI moi lan tao codespace moi → `CLIENT_URL` phai sinh dong tu
+//    $CODESPACE_NAME (setup.sh lo), KHONG duoc hardcode. Dat sai thi link
+//    trong email verify/reset bam khong duoc.
+//
+// 3. Codespace TU NGU sau ~30 phut khong ai dung. Ngu day thi container tu len
+//    lai (postStartCommand). Nen KHONG dung URL nay lam dich giam sat uptime.
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  "name": "ShopLite — demo stack production",
+
+  // Base image thuong + feature docker-in-docker, KHONG dung image `universal`:
+  // universal nang ~30GB, keo dai luc tao codespace, ma o day chi can docker.
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+
+  // Toan bo stack (nginx + api + worker + postgres + redis) chay bang docker
+  // BEN TRONG codespace. Cong ma compose publish (8080) nam ngay tren network
+  // namespace cua codespace nen Codespaces forward duoc.
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+
+  // May 2-core/8GB (mac dinh goi free) du chay 5 container. Xin 32GB dia vi
+  // build ca hai image + layer cache ton kha nhieu.
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+
+  // Trung voi HTTP_PORT trong .env do setup.sh sinh ra. Doi so nay thi phai doi
+  // ca hai cho.
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "ShopLite (nginx)",
+      "onAutoForward": "notify"
+    }
+  },
+
+  // postCreate chay MOT lan luc tao codespace: sinh .env + build + migrate + seed.
+  // Lan dau mat ~5-10 phut tren may 2 core (build 2 image tu source).
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+
+  // postStart chay MOI lan codespace ngu day: chi bat lai container, khong build.
+  "postStartCommand": "bash .devcontainer/start.sh",
+
+  "remoteUser": "vscode"
+}

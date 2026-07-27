@@ -120,6 +120,85 @@ Vài điểm đã chốt, ghi ở đây để khỏi "sửa lại cho giống m�
 
 Hai job đầu chạy song song vì `server/` và `client/` là hai project npm rời.
 
+## Demo công khai bằng GitHub Codespaces
+
+Bản demo **không chạy trên VPS**: Codespaces cấp sẵn một URL HTTPS thật nên không
+cần tên miền, không cần certbot, và gói free 120 core-hours/tháng không đòi thẻ.
+
+Trên GitHub: **Code → Codespaces → Create codespace on main**. Lần đầu mất ~5–10
+phút (`.devcontainer/setup.sh` sinh `.env`, build 2 image, migrate, seed). Xong,
+terminal in ra địa chỉ demo và ba tài khoản seed.
+
+| Tài khoản | Vai trò |
+| --- | --- |
+| `admin@shoplite.dev` | ADMIN — vào được `/admin` |
+| `cong@webpx.vn` | khách đã verify — đặt hàng được |
+| `hanh.unverified@gmail.com` | khách **chưa** verify — thử BR4, đặt hàng ra 403 |
+
+Mật khẩu do `SEED_PASSWORD` quyết định (mặc định `Demo@12345` trong Codespaces).
+
+Ba chỗ dễ vấp, đã xử lý sẵn hoặc phải làm tay:
+
+- **Cổng forward mặc định là Private** → người ngoài mở link chỉ thấy màn đăng nhập
+  GitHub. `setup.sh` thử đổi bằng `gh codespace ports visibility`, không được thì in
+  hướng dẫn đổi tay (tab **PORTS** → chuột phải cổng 8080 → **Port Visibility →
+  Public**). Đặt trong `devcontainer.json` thì **không được** — `portsAttributes`
+  chưa hỗ trợ `visibility` (community discussion #10394, kiểm lại 27/07/2026).
+- **URL đổi theo từng codespace** → `CLIENT_URL` sinh động từ `$CODESPACE_NAME`,
+  không hardcode. Đặt sai thì link trong email verify/reset bấm không được.
+- **Codespace tự ngủ sau ~30 phút** → ngủ dậy `postStartCommand` bật lại stack.
+  Vì vậy **không** dùng URL này làm đích giám sát uptime.
+
+Email không gửi được (SMTP là placeholder) nên dùng tài khoản seed đã verify sẵn.
+Muốn lấy link verify của tài khoản mới đăng ký thì đọc thẳng trong Redis:
+
+```bash
+docker exec shoplite-redis-prod redis-cli get bull:email:id
+docker exec shoplite-redis-prod redis-cli hget bull:email:<id> data
+```
+
+## Backup và diễn tập khôi phục
+
+```bash
+./infra/backup.sh                 # pg_dump | gzip → ~/backups, xóa bản > 30 ngày
+./infra/restore-test.sh           # diễn tập: khôi phục bản mới nhất rồi đối chiếu
+```
+
+Cron hằng đêm: `0 2 * * * /đường/dẫn/shoplite/infra/backup.sh >> /var/log/shoplite-backup.log 2>&1`
+
+`backup.sh` ghi ra file `.partial` rồi mới đổi tên — bị giết giữa chừng thì không
+để lại một bản cụt **mang tên thật**, thứ chỉ lộ ra đúng lúc cần khôi phục. Nó cũng
+chỉ xóa bản cũ **sau khi** bản mới đã thành công.
+
+`restore-test.sh` khôi phục vào một DB riêng trong container Postgres của **dev**
+(không đụng DB đang phục vụ), rồi so cả số dòng lẫn vân tay MD5 nội dung với bản
+gốc. Ba chi tiết khiến nó không phải diễn tập giả:
+
+- `ON_ERROR_STOP=1` — mặc định `psql` gặp lỗi vẫn chạy tiếp và **thoát mã 0**, tức
+  là một bản dump cắt ngang vẫn "khôi phục thành công".
+- So sánh với bản gốc — restore không lỗi chưa chứng minh dữ liệu đúng.
+- Đã thử ngược với một bản dump cố ý cắt cụt: script phải **đỏ**. Nó đỏ thật.
+
+Kết quả lần chạy 27/07/2026: 6 bảng khớp số dòng (users 8 / products 24 /
+categories 14 / orders 17 / order_items 27 / payments 16), tổng tiền đơn và vân
+tay MD5 của `products` + `users` khớp tuyệt đối.
+
+### Ba mục của Roadmap Phase 8 KHÔNG áp dụng được — và vì sao
+
+Ghi ra đây thay vì lặng lẽ bỏ qua, vì "không có trong README" và "đã cân nhắc rồi
+bỏ" nhìn từ ngoài giống hệt nhau:
+
+| Mục | Vì sao N/A |
+| --- | --- |
+| SSL Labs grade A | HTTPS ở đây là chứng chỉ của `*.app.github.dev` — hạ tầng GitHub, không phải cấu hình của mình. Chấm điểm nó thì đang chấm điểm GitHub. |
+| UptimeRobot xanh 24h | Codespace **tự ngủ sau ~30 phút** không ai dùng. Giám sát một địa chỉ được thiết kế để tắt thì cảnh báo đỏ là đúng chứ không phải sự cố. |
+| Push `main` → site tự update | Không có máy nào chạy 24/7 để `ssh` vào. CI vẫn build và push image lên ghcr.io (Phase 7); bước kéo image về là thủ công `./deploy.sh --pull`. |
+
+Nguyên nhân gốc: **không đăng ký được VPS/PaaS nào** — Oracle Cloud Always Free,
+Railway, Fly.io đều bắt xác minh thẻ tín dụng. Ba mục trên làm được thật ngay khi
+có một máy chạy liên tục; `infra/vps-setup.sh` (giữ trong repo, **chưa chạy thật
+lần nào**) là bước đầu của đường đó.
+
 ## API
 
 - Tài liệu Swagger: `GET /api/docs`

@@ -106,7 +106,10 @@ function calcTotal(items: Array<{ unitPrice: Decimal; quantity: number }>): Deci
 // CONSTANTS
 // ─────────────────────────────────────────────
 
-const DEFAULT_PASSWORD = 'Webpx@2024';
+// Đặt SEED_PASSWORD khi seed cho một bản demo mở ra Internet (Codespaces —
+// xem .devcontainer/setup.sh). Mặc định giữ nguyên như cũ để lệnh seed ở máy
+// dev và mọi ghi chú cũ không đổi.
+const DEFAULT_PASSWORD = process.env.SEED_PASSWORD ?? 'Webpx@2024';
 const PLACEHOLDER_BASE = 'https://picsum.photos/seed';
 
 // ─────────────────────────────────────────────
