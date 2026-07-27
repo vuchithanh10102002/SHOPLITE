@@ -104,23 +104,28 @@ echo "▶ Build + deploy (lan dau ~5-10 phut tren may 2 core)..."
 ./deploy.sh
 
 # ─── 3. Seed du lieu demo ───────────────────────────────────────────────────
-PG_USER=$(grep -E '^POSTGRES_USER=' .env | tail -1 | cut -d= -f2- | tr -d '"\r')
-PG_DB=$(grep -E '^POSTGRES_DB=' .env | tail -1 | cut -d= -f2- | tr -d '"\r')
-
-COUNT=$(docker exec shoplite-postgres-prod \
-          psql -U "$PG_USER" -d "$PG_DB" -tAc "select count(*) from products" 2>/dev/null || echo 0)
-COUNT=$(echo "$COUNT" | tr -dc '0-9')
-
-if [ "${COUNT:-0}" = "0" ]; then
-  echo "▶ DB rong → seed du lieu demo..."
-  # Service `migrate` dung stage `migrator` (co prisma CLI + tsx) nen chay duoc
-  # seed; image `api` co y khong mang CLI theo.
-  # `-e SEED_PASSWORD`: service migrate khong co env_file nen phai truyen tay.
-  docker compose -f docker-compose.prod.yml run --rm \
-    -e SEED_PASSWORD="$SEED_PASSWORD" migrate npx prisma db seed
-else
-  echo "▶ DB da co $COUNT san pham — bo qua seed."
-fi
+# LUON chay, KHONG kiem "DB da co san pham chua" nua.
+#
+# Ban dau doan nay dem `select count(*) from products` roi bo qua seed neu > 0.
+# DA HONG THAT tren codespace dau tien (2026-07-27): mot lan seed chet giua chung
+# de lai DUNG 1 san pham, tu do moi lan chay sau deu thay "1 > 0" nen bo qua seed
+# VINH VIEN — demo mo ra chi co mot mon hang, va khong he co dong log loi nao.
+#
+# Cai sai la o y tuong chu khong o dong code: lay "co du lieu" lam bang chung cho
+# "da seed xong" thi khong phan biet duoc seed hoan tat voi seed do dang. Chay
+# lai duoc vo han moi la thu bao ve that su.
+#
+# seed.ts idempotent tu dau den cuoi (user/category/product deu `upsert`, order
+# da ton tai thi bo qua) nen chay lai khong nhan doi gi. Doi lai: moi lan codespace
+# tao moi ton them ~15 giay. Va neu seed hong that thi `set -e` cho chet ngay o
+# day kem log, thay vi im lang di tiep roi de nguoi dung tu phat hien cua hang rong.
+#
+# Service `migrate` dung stage `migrator` (co prisma CLI + tsx) nen chay duoc
+# seed; image `api` co y khong mang CLI theo.
+# `-e SEED_PASSWORD`: service migrate khong co env_file nen phai truyen tay.
+echo "▶ Seed du lieu demo (idempotent — chay lai vo hai)..."
+docker compose -f docker-compose.prod.yml run --rm \
+  -e SEED_PASSWORD="$SEED_PASSWORD" migrate npx prisma db seed
 
 # ─── 4. Mo cong ra ngoai ────────────────────────────────────────────────────
 # Mac dinh cong forward la PRIVATE: nguoi khac mo link se thay man hinh dang
