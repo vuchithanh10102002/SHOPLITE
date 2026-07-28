@@ -1,11 +1,9 @@
 # GitHub Actions CI (Roadmap 7.1 buoc 4).
 #
 # ═══ LECH ROADMAP CO CHU Y: BA job chu khong phai HAI ═══
-# Roadmap viet "2 jobs: test + build-and-push". Nhung `server/` va `client/` la
-# HAI project npm roi (hai package-lock, hai node_modules, hai toolchain) —
-# nhet chung vao mot job la bat chung xep hang: `npm ci` cua client phai doi
-# toan bo suite test server chay xong. Tach ra thi hai job chay SONG SONG va
-# khi do thi biet ngay hong o phia nao ma khong phai mo log.
+# Roadmap viet "2 jobs: test + build-and-push", nhung `server/` va `client/` la HAI
+# project npm roi — nhet chung mot job la bat chung xep hang (npm ci cua client phai
+# doi ca suite test server). Tach ra thi chay SONG SONG va nhin la biet hong phia nao.
 #   server   prisma generate → migrate → typecheck → 237 test (can postgres+redis)
 #   client   oxlint → tsc -b → vite build (khong can service nao)
 #   publish  chi chay khi CA HAI xanh VA la push vao main
@@ -30,9 +28,9 @@ jobs:
     name: Server — typecheck + test
     runs-on: ubuntu-latest
 
-    # Gia tri o day PHAI khop `server/.env.test` (file duoc track co y, xem
-    # .gitignore): postgres/postgres @ localhost:5432, db shoplite_test, redis db 1.
-    # Khop duoc thi CI khong can ghi de bien nao — chay y het may dev.
+    # PHAI khop `server/.env.test` (file duoc track co y): postgres/postgres @
+    # localhost:5432, db shoplite_test, redis db 1. Khop thi CI khong can ghi de bien
+    # nao — chay y het may dev.
     services:
       postgres:
         image: postgres:16-alpine
@@ -41,9 +39,8 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: shoplite_test
         ports: ["5432:5432"]
-        # Thieu health-* thi service duoc coi la san sang ngay khi container
-        # START, trong khi postgres con dang initdb → test chet chop nhoang
-        # kieu "Can't reach database server" (bay 7.2).
+        # Thieu health-* thi service duoc coi la san sang ngay khi container START,
+        # trong khi postgres con initdb → test chet "Can't reach database server".
         options: >-
           --health-cmd pg_isready
           --health-interval 5s
@@ -142,10 +139,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ═══ BAY: GHCR CHI NHAN TEN VIET THUONG ═══
-      # Repo nay ten `vuchithanh10102002/SHOPLITE` (co chu HOA). Dung thang
-      # `ghcr.io/${{ github.repository }}` se hong voi "invalid reference format:
-      # repository name must be lowercase". Ha chu o day mot lan roi dung lai.
+      # BAY: GHCR chi nhan ten VIET THUONG, ma repo nay co chu HOA — dung thang
+      # `ghcr.io/${{ github.repository }}` se hong voi "repository name must be
+      # lowercase". Ha chu mot lan o day roi dung lai.
       - name: Tinh ten image (viet thuong)
         id: img
         run: echo "prefix=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"

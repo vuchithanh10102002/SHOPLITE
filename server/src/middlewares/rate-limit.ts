@@ -29,9 +29,8 @@ export function rateLimit(options: RateLimitOptions) {
     let ttl: number;
 
     try {
-      // MULTI de INCR + EXPIRE + TTL la mot thao tac nguyen tu.
-      // Ban cu goi incr roi moi expire: neu process chet giua 2 lenh, key khong bao
-      // gio co TTL → counter ket vinh vien → user bi khoa mai mai.
+      // MULTI de INCR + EXPIRE + TTL nguyen tu: goi incr roi moi expire thi process
+      // chet giua 2 lenh la key khong bao gio co TTL → user bi khoa mai mai.
       // EXPIRE ... NX: chi dat TTL khi key chua co, khong gia han cua so moi request.
       const result = await redisConnection
         .multi()
@@ -45,9 +44,8 @@ export function rateLimit(options: RateLimitOptions) {
       count = result[0][1] as number;
       ttl = result[2][1] as number;
     } catch (err) {
-      // FAIL-OPEN: Redis chet thi app cham di chu khong duoc chet theo.
-      // Rate limit la lop bao ve, khong phai nguon chan ly — mat no khong lam
-      // hong du lieu. (Neu sau nay can chong brute force tuyet doi thi doi fail-closed.)
+      // FAIL-OPEN: rate limit la lop bao ve chu khong phai nguon chan ly, mat no
+      // khong lam hong du lieu. Can chong brute force tuyet doi thi doi fail-closed.
       logger.warn({ err, key }, "rate limit: redis loi, cho request di qua");
 
       return next();

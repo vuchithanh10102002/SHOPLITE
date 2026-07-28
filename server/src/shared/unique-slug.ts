@@ -5,21 +5,15 @@ import { slugify } from "./slugify";
 /**
  * Sinh slug duy nhat + insert, dung chung cho Category va Product.
  *
- * Tach ra khoi category.service KHONG phai vi DRY, ma vi hai cai bay ben duoi
- * (probe-roi-van-phai-retry, va khong-loc-deletedAt) qua tinh vi de ton tai o
- * hai ban copy — ban copy se troi lech, va cai bay chi duoc va o mot ben.
- *
- * Tach file rieng chu khong nhet vao slugify.ts: slugify.ts la logic chuoi
- * thuan, khong biet gi ve Prisma. Nhet Prisma vao do la lam ban mot module
- * dang sach.
+ * Tach ra khoi category.service KHONG phai vi DRY ma vi hai cai bay ben duoi
+ * (probe-roi-van-phai-retry, khong-loc-deletedAt) qua tinh vi de ton tai o hai ban
+ * copy. Khong nhet vao slugify.ts: file do la logic chuoi thuan, khong biet Prisma.
  */
 
 /**
- * P2002 = vi pham unique constraint. errorHandler khong map loi Prisma, nen
- * P2002 khong bat o day se roi vao nhanh 500.
- *
- * `meta.target` tuy phien ban/driver co the la string[] hoac string → ep ve text
- * roi tim "slug" cho chac.
+ * P2002 = vi pham unique constraint; errorHandler khong map loi Prisma nen khong
+ * bat o day la roi vao nhanh 500. `meta.target` tuy phien ban co the la string[]
+ * hoac string → ep ve text roi tim "slug".
  */
 export function isSlugConflict(err: unknown): boolean {
   if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== "P2002") {
@@ -36,9 +30,8 @@ const MAX_SLUG_ATTEMPTS = 5;
  * Tim slug con trong dang `base`, `base-2`, `base-3`...
  *
  * `findTaken` PHAI tra ve moi slug bat dau bang `base`, KHONG duoc loc
- * `deletedAt: null`: cot slug @unique tren toan bang, row da soft-delete VAN
- * giu slug cua no. Loc deletedAt se de xuat mot slug trong tren giay to nhung
- * insert vao la vo unique constraint.
+ * `deletedAt: null`: slug @unique tren toan bang, row da soft-delete VAN giu slug —
+ * loc deletedAt se de xuat mot slug "trong" ma insert vao la vo unique constraint.
  */
 async function findFreeSlug(
   base: string,
@@ -54,11 +47,10 @@ async function findFreeSlug(
 }
 
 /**
- * Slugify `name`, tim slug trong, roi goi `insert` voi slug do — retry khi dam
- * unique constraint.
+ * Slugify `name`, tim slug trong, insert — retry khi dam unique constraint.
  *
- * Do slug trong roi VAN phai retry: giua luc do va luc insert, mot request khac
- * co the chiem mat slug do. Probe chi de giam va cham; retry moi la cai dam bao.
+ * Do slug trong roi VAN phai retry: giua luc do va luc insert, request khac co the
+ * chiem mat slug do. Probe chi de giam va cham; retry moi la cai dam bao.
  *
  * Chu goi phai tu dam bao `name` slugify ra khac rong (zod da lo o schemas).
  */

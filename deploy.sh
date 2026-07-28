@@ -5,10 +5,8 @@
 #   ./deploy.sh --pull   keo image da build san tu registry (dung o Phase 8 khi
 #                        CI da push len ghcr.io)
 #
-# set -e   dung ngay khi mot lenh that bai — KHONG duoc di tiep sau khi migrate
-#          hong, vi `up -d` se dua code moi len schema cu.
-# set -u   goi bien chua dat = loi, thay vi lang le thanh chuoi rong.
-# pipefail lenh trong pipe hong thi ca pipe hong.
+# `set -e` o day khong phai thoi quen: di tiep sau khi migrate hong nghia la `up -d`
+# dua code moi len schema cu.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -36,12 +34,9 @@ echo "▶ Bat postgres + redis..."
 $COMPOSE up -d --wait postgres redis
 
 # ─── 3. Migrate TRUOC khi doi code ──────────────────────────────────────────
-# Thu tu nay quan trong: migrate xong roi moi thay code. Nguoc lai (code moi len
-# truoc) thi trong vai giay code moi doc schema cu → 500 hang loat.
-#
-# Dung service `migrate` (stage migrator, co prisma CLI) chu KHONG phai
-# `run --rm api npx prisma migrate deploy` nhu Roadmap viet — image api co y
-# khong mang prisma CLI. `--rm` de container one-off khong dong lai.
+# Thu tu quan trong: code moi len truoc thi trong vai giay no doc schema cu → 500
+# hang loat. Dung service `migrate` (stage migrator) chu KHONG phai
+# `run --rm api npx prisma migrate deploy` nhu Roadmap viet — image api khong co CLI.
 echo "▶ Chay migration..."
 $COMPOSE run --rm migrate
 
@@ -58,9 +53,8 @@ docker image prune -f
 echo ""
 $COMPOSE ps
 echo ""
-# HTTP_PORT nam trong file .env — compose tu doc file do, con SHELL NAY thi khong.
-# Khong doc ra day thi dong huong dan ben duoi luon in "localhost:80" trong khi
-# stack dang o 8080 (da bi in sai mot lan). `grep` mot dong thay vi `source .env`:
-# file do chua mat khau/secret, khong can nap het vao moi truong cua script.
+# Compose tu doc .env, con SHELL NAY thi khong — khong doc ra thi dong huong dan duoi
+# luon in "localhost:80" trong khi stack o 8080 (da in sai mot lan). `grep` mot dong
+# thay vi `source .env` vi file do chua secret, khong can nap het vao moi truong.
 PORT_HINT=$(grep -E '^HTTP_PORT=' .env | tail -1 | cut -d= -f2 | tr -d '"\r')
 echo "✓ Deploy xong. Kiem tra: curl -s localhost:${PORT_HINT:-80}/health/ready"

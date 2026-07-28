@@ -18,18 +18,15 @@ const ACCEPT = "image/jpeg,image/png,image/webp";
  *
  * Ba diem ky thuat dang nho:
  *
- * 1. `URL.createObjectURL` PHAI di kem `revokeObjectURL`. Moi lan goi la trinh
- *    duyet giu nguyen file trong bo nho cho toi khi tab dong. Admin chon thu 20
- *    tam anh 5MB = 100MB ro ri, khong co canh bao nao. Cleanup nam trong
- *    useEffect nen chay ca khi doi file LAN khi roi trang.
+ * 1. `URL.createObjectURL` PHAI di kem `revokeObjectURL` — moi lan goi la trinh duyet
+ *    giu nguyen file trong bo nho toi khi tab dong (chon thu 20 tam 5MB = 100MB ro ri,
+ *    khong canh bao). Cleanup trong useEffect nen chay ca khi doi file lan khi roi trang.
  *
- * 2. `input[type=file]` GIU file cu sau khi upload xong (Roadmap 6.2). Chon lai
- *    dung file do se KHONG ban su kien change → nut nhu chet. Phai
- *    `ref.current.value = ""`.
+ * 2. `input[type=file]` GIU file cu sau khi upload xong: chon lai dung file do se
+ *    KHONG ban su kien change → nut nhu chet. Phai `ref.current.value = ""`.
  *
- * 3. Loc dinh dang/kich thuoc o day chi la phep lich su voi nguoi dung. Chot that
- *    la magic bytes o backend (shared/image-magic.ts) — doi duoi .exe thanh .png
- *    van bi chan 400 truoc khi cham Cloudinary.
+ * 3. Loc dinh dang/kich thuoc o day chi la phep lich su. Chot that la magic bytes o
+ *    backend (shared/image-magic.ts).
  */
 export function ImageManager({ productId, images }: { productId: string; images: ProductImage[] }) {
   const [file, setFile] = useState<File | null>(null);

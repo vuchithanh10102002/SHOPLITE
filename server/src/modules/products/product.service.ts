@@ -12,9 +12,9 @@ import { PageMeta } from "../../shared/response";
 import { CacheResult, remember, getVersion, bumpVersion } from "../../lib/cache";
 import { CreateProductInput, ListProductQuery, UpdateProductInput } from "./product.schemas";
 
-// `stock` CO trong select (can de tinh stockStatus) nhung KHONG duoc ra khoi
-// service — toPublicProduct() la cai chan. `publicId` cua anh CUNG khong select
-// o day: no la id noi bo de xoa Cloudinary, khong duoc lo ra public API.
+// `stock` va `deletedAt` CO trong select (can de tinh stockStatus / danh dau hang
+// da xoa cho admin) nhung KHONG duoc ra khoi service — toPublicProduct() la cai
+// chan. `publicId` cua anh KHONG select: id noi bo de xoa Cloudinary.
 const productSelect = {
   id: true,
   name: true,
@@ -23,9 +23,6 @@ const productSelect = {
   price: true,
   stock: true,
   createdAt: true,
-  // `deletedAt` select o day de nhanh admin (?includeDeleted) danh dau hang da
-  // xoa — nhung KHONG lot ra public: toPublicProduct() khong liet ke no, chi
-  // toAdminProduct() moi tra. Select thua mot cot nullable, khong dang ke.
   deletedAt: true,
   category: { select: { id: true, name: true, slug: true } },
   images: {
@@ -36,20 +33,15 @@ const productSelect = {
 
 type ProductRow = Prisma.ProductGetPayload<{ select: typeof productSelect }>;
 
-// StockStatus + stockStatusOf da tach sang shared/stock.ts (cart cung xai). Re-
-// export de PublicProduct ben duoi va moi cho quen doc StockStatus tu day van chay.
+// StockStatus da tach sang shared/stock.ts (cart cung xai); re-export cho cho quen.
 export type { StockStatus };
 
-// ── Cache: version key (handbook 8.2, roadmap Phase 3 buoc 3) ────────────────
-// MOT bien dem duy nhat cho CA list va detail: moi write chi `incr` no la ca hai
-// loai key deu thanh "mo coi". Doi lay su don gian nay, sua 1 san pham lam bay
-// TOAN BO detail cache chu khong rieng cai vua sua — o quy mo nay chap nhan
-// duoc, va khoi phai biet slug luc delete. Day dung la huong "version cho ca
-// list + detail" da chot.
+// MOT bien dem chung cho CA list lan detail: moi write chi `incr` la ca hai loai
+// key thanh mo coi. Doi lai su don gian nay: sua 1 san pham lam bay TOAN BO detail
+// cache — chap nhan duoc o quy mo nay, va khoi phai biet slug luc delete.
 const VER_KEY = "products:ver";
 
-// TTL 60s (handbook 8.2) — luoi an toan cuoi. Ke ca incr co bug thi cache cu
-// cung chi song them toi da mot nhip 60s.
+// Luoi an toan cuoi: incr co bug thi cache cu cung chi song them mot nhip.
 const LIST_TTL = 60;
 const DETAIL_TTL = 60;
 
@@ -72,17 +64,13 @@ export interface PublicProduct {
 }
 
 /**
- * CHO DUY NHAT hai viec xay ra:
- *
- *  1. Decimal → string. Prisma tra `price` la Decimal object; de no tu serialize
- *     ra JSON thi frontend nhan duoc thu khong doan truoc. Chot mot cho, khong
- *     rai `.toString()` moi controller (roadmap 3.2). Cung nho the ma gia tri
- *     dem vao cache da la string san — JSON round-trip khong lam bien dang.
- *  2. `stock` (so that, thong tin noi bo) → `stockStatus`. Handbook 6.3: public
- *     API khong duoc thay con so ton kho.
+ * CHO DUY NHAT hai viec xay ra: Decimal → string (chot mot cho, va nho the gia tri
+ * vao cache da la string nen JSON round-trip khong lam bien dang), va `stock` →
+ * `stockStatus` (handbook 6.3: public API khong duoc thay con so ton kho).
  *
  * Liet ke tay tung field chu KHONG `...rest`: spread thi mai sau them cot vao
- * schema Prisma la no tu dong lot ra API ma khong ai nhan ra.
+ * schema Prisma la no tu dong lot ra API ma khong ai nhan ra. Ap dung cho ca
+ * `images` ben trong.
  */
 function toPublicProduct(row: ProductRow): PublicProduct {
   return {
@@ -93,27 +81,18 @@ function toPublicProduct(row: ProductRow): PublicProduct {
     price: row.price.toString(),
     stockStatus: stockStatusOf(row.stock),
     category: row.category,
-    // Liet ke tay tung field (id/url/sortOrder) — KHONG tra thang row.images,
-    // vi productSelect co the sau nay them cot (vd publicId) va no se tu lot ra.
     images: row.images.map((img) => ({ id: img.id, url: img.url, sortOrder: img.sortOrder })),
     createdAt: row.createdAt,
   };
 }
 
 /**
- * Chi dung o nhanh admin (?includeDeleted). = public + `deletedAt` + `stock` de
- * admin biet CAI NAO da xoa va con bao nhieu hang; list ma khong phan biet duoc
- * thi vo dung. Ca hai field co CHU y nam ngoai PublicProduct/toPublicProduct —
- * chung la field admin, khong duoc lo ra public API.
+ * = public + `deletedAt` + `stock`, chi cac ham tra AdminProduct moi lo hai field
+ * nay. Man admin can biet cai nao da xoa va con bao nhieu hang; `stockStatus`
+ * khong du de quyet dinh nhap hang, va form sua can gia tri that de do vao input.
  *
- * `stock` (Phase 6): man admin phai hien con so ton kho THAT — `stockStatus`
- * ("low_stock") du cho nguoi mua nhung khong du de nguoi ban quyet dinh nhap
- * hang, va form sua san pham can gia tri hien tai de do vao o input, neu khong
- * moi lan sua ten la stock bi ghi de bang mot con so doan mo.
- *
- * Nhac lai gioi han: chi CAC HAM tra AdminProduct moi lo stock. POST/PATCH
- * /products van tra PublicProduct (co test khoa `not.toHaveProperty("stock")`) —
- * dung de nguyen the, doi shape o do la pha hop dong da co.
+ * POST/PATCH /products van tra PublicProduct (co test khoa
+ * `not.toHaveProperty("stock")`) — doi shape o do la pha hop dong da co.
  */
 export interface AdminProduct extends PublicProduct {
   deletedAt: Date | null;
@@ -160,8 +139,7 @@ async function create(input: CreateProductInput): Promise<PublicProduct> {
     }),
   );
 
-  // Co san pham moi → cache list/detail cu deu lac hau. Bump SAU khi DB ghi
-  // xong (handbook 8.3: delete/version, khong update cache khi ghi).
+  // Bump SAU khi DB ghi xong (handbook 8.3: delete/version, khong update cache khi ghi).
   await bumpVersion(VER_KEY);
 
   return toPublicProduct(created);
@@ -179,12 +157,10 @@ async function update(id: string, input: UpdateProductInput): Promise<PublicProd
   const updated = await prisma.product.update({
     where: { id },
     data: {
-      // Ghi `name` ma quen `nameNormalized` thi search van tra ket qua theo ten
-      // CU — bug im lang, khong ai thay cho den luc co nguoi tim khong ra hang.
-      // Hai cot nay khong bao gio duoc tach roi.
+      // Ghi `name` ma quen `nameNormalized` thi search van tra ket qua theo ten CU —
+      // bug im lang. Hai cot nay khong bao gio duoc tach roi.
       //
-      // Doi ten KHONG doi slug: slug da nam trong URL/link nguoi ta luu
-      // (handbook 6.3, va la quyet dinh da chot o buoc 1 voi category).
+      // Doi ten KHONG doi slug: slug da nam trong URL nguoi ta luu (handbook 6.3).
       ...(input.name !== undefined && {
         name: input.name,
         nameNormalized: normalizeText(input.name),
@@ -192,23 +168,22 @@ async function update(id: string, input: UpdateProductInput): Promise<PublicProd
       ...(input.categoryId !== undefined && { categoryId: input.categoryId }),
       ...(input.price !== undefined && { price: input.price }),
       ...(input.stock !== undefined && { stock: input.stock }),
-      // `null` = xoa mo ta; `undefined` = khong dong toi. Phai dung
-      // `!== undefined` chu khong phai truthy check, neu khong `null` bi nuot.
+      // `null` = xoa mo ta; `undefined` = khong dong toi. Phai dung `!== undefined`
+      // chu khong phai truthy check, neu khong `null` bi nuot.
       ...(input.description !== undefined && { description: input.description }),
     },
     select: productSelect,
   });
 
-  // Day dung cai test DoD kiem: sua 1 san pham → version tang → list lan sau miss.
   await bumpVersion(VER_KEY);
 
   return toPublicProduct(updated);
 }
 
 /**
- * Soft delete. Khong chan nhu category (409 khi con san pham): product bi xoa
- * van con duoc tham chieu tu cart_items/order_items — don da dat phai giu duoc
- * lich su. Cart se hien co `isUnavailable` (handbook 6.4).
+ * Soft delete. Khong chan nhu category (409 khi con san pham): product bi xoa van
+ * con duoc tham chieu tu cart_items/order_items — don da dat phai giu duoc lich su.
+ * Cart hien no kem co `isUnavailable` (handbook 6.4).
  */
 async function remove(id: string) {
   const product = await prisma.product.findFirst({
@@ -219,23 +194,18 @@ async function remove(id: string) {
 
   await prisma.product.update({ where: { id }, data: { deletedAt: new Date() } });
 
-  // San pham vua an di khoi list/detail → cache cu con tra no ra la sai.
   await bumpVersion(VER_KEY);
 
   return { message: "Đã xóa sản phẩm" };
 }
 
 /**
- * Khoi phuc hang da soft-delete (Phase 6 DoD: "tao, sua, soft delete, khoi phuc").
- * Doi xung voi remove(): chi xoa dau `deletedAt`, khong dung toi gi khac.
- *
- * Hai duong tu choi, co chu y phan biet:
- *  - khong co id → 404 nhu moi cho khac.
- *  - co nhung dang song → 409, KHONG im lang tra ve "thanh cong". Admin bam
- *    Khoi phuc mot dong dang song nghia la UI dang hien sai trang thai; nuot di
- *    thi khong ai biet.
- *  - danh muc cua no da bi xoa → 409: tha ra thi san pham hien o list public
- *    nhung khong nam trong cay danh muc nao ca. Bat admin doi danh muc truoc.
+ * Doi xung voi remove(): chi xoa dau `deletedAt`. Ba duong tu choi:
+ *  - khong co id → 404.
+ *  - co nhung dang song → 409, KHONG im lang tra "thanh cong": admin bam Khoi phuc
+ *    mot dong dang song nghia la UI dang hien sai trang thai, nuot di thi khong ai biet.
+ *  - danh muc cua no da bi xoa → 409: tha ra thi san pham hien o list public nhung
+ *    khong nam trong cay danh muc nao. Bat admin doi danh muc truoc.
  */
 async function restore(id: string): Promise<AdminProduct> {
   const product = await prisma.product.findUnique({
@@ -259,23 +229,19 @@ async function restore(id: string): Promise<AdminProduct> {
     select: productSelect,
   });
 
-  // San pham quay lai list/detail → cache cu (dang thieu no) lac hau.
   await bumpVersion(VER_KEY);
 
-  // Tra AdminProduct: nguoi goi la man admin, ho can thay `deletedAt` (gio la null)
-  // de cap nhat dong trong bang ma khong phai fetch lai.
+  // AdminProduct: nguoi goi la man admin, ho can `deletedAt` (gio null) de cap nhat
+  // dong trong bang ma khong phai fetch lai.
   return toAdminProduct(restored);
 }
 
 /**
- * Detail cho man admin: theo ID (khong phai slug), THAY ca hang da xoa, co
- * `stock`. Man sua san pham can dung ba thu do — `GET /:slug` public khong cho
- * cai nao: no loc `deletedAt: null` (mo trang sua mot hang da xoa se 404) va
- * giau stock.
+ * Detail cho man admin: theo ID, THAY ca hang da xoa, co `stock` — `GET /:slug`
+ * public khong cho cai nao (no loc `deletedAt: null` va giau stock).
  *
- * KHONG cache: admin mo form sua vai lan mot ngay, doi lai form luon doc so ton
- * kho MOI NHAT. Cache o day nghia la admin sua gia dua tren so lieu cu toi 60s —
- * dat hon nhieu so voi mot query.
+ * KHONG cache: doi lai form luon doc so ton kho MOI NHAT. Cache o day nghia la
+ * admin sua gia dua tren so lieu cu toi 60s.
  */
 async function getByIdAdmin(id: string): Promise<AdminProduct> {
   const row = await prisma.product.findUnique({ where: { id }, select: productSelect });
@@ -286,14 +252,10 @@ async function getByIdAdmin(id: string): Promise<AdminProduct> {
 
 /**
  * Cache-aside bang version key. Tra kem `hit` de controller ghi cache_hit vao
- * request log — service KHONG dung toi `res`, controller la cho hai the gioi gap.
+ * request log — service KHONG dung toi `res`.
  *
- * Ver nam TRONG key (`products:detail:<ver>:<slug>`) nen khong can xoa gi khi
- * ghi: mot lan bumpVersion o create/update/remove la key cu thanh mo coi.
- *
- * loader() nem notFound TRUOC khi remember kip setex → 404 KHONG bi cache lai.
- * Dung y muon: neu cache negative, product vua tao xong van bao 404 het mot nhip
- * TTL.
+ * loader() nem notFound TRUOC khi remember kip setex → 404 KHONG bi cache lai; neu
+ * cache negative thi product vua tao xong van bao 404 het mot nhip TTL.
  */
 async function getBySlug(slug: string): Promise<CacheResult<PublicProduct>> {
   const ver = await getVersion(VER_KEY);
@@ -311,13 +273,11 @@ async function getBySlug(slug: string): Promise<CacheResult<PublicProduct>> {
 }
 
 /**
- * Whitelist sort → orderBy. Gia tri sort KHONG BAO GIO duoc di thang vao
- * orderBy; zod da chan bang enum, day la lop chan thu hai.
+ * Whitelist sort → orderBy (zod da chan bang enum, day la lop thu hai).
  *
- * Khoa phu `id` o MOI nhanh: nhieu san pham cung gia thi `orderBy price` khong
- * xac dinh thu tu giua chung, Postgres duoc phep tra khac nhau giua 2 query →
- * trang 2 lap lai dong da thay o trang 1, hoac nuot mat dong. Phan trang on
- * dinh can mot khoa duy nhat o cuoi.
+ * Khoa phu `id` o MOI nhanh: nhieu san pham cung gia thi Postgres duoc phep tra
+ * thu tu khac nhau giua 2 query → trang 2 lap lai dong da thay o trang 1, hoac
+ * nuot mat dong.
  */
 const ORDER_BY: Record<ListProductQuery["sort"], Prisma.ProductOrderByWithRelationInput[]> = {
   price_asc: [{ price: "asc" }, { id: "asc" }],
@@ -326,16 +286,12 @@ const ORDER_BY: Record<ListProductQuery["sort"], Prisma.ProductOrderByWithRelati
 };
 
 /**
- * Chuoi khoa on dinh cho cache list — GOP tu cac field da validate, thu tu co
- * dinh. Hai request cung dieu kien phai ra cung mot chuoi; khac dieu kien phai
- * ra khac chuoi (neu khong: serve nham ket qua cua query khac).
+ * Chuoi khoa on dinh cho cache list: cung dieu kien phai ra cung mot chuoi, khac
+ * dieu kien phai ra khac chuoi (neu khong: serve nham ket qua cua query khac).
  *
- * `q` di qua normalizeText GIONG HET luc query DB: "Áo" va "áo" cho cung ket
- * qua (deu tra cot nameNormalized chua "ao"); key theo `q` tho thi cache hai
- * slot y het nhau — dung nhung phi hit rate.
- *
- * Field vang mat → chuoi rong, KHONG phai chuoi "undefined": `?minPrice=0` va
- * `?minPrice=` phai ra khac nhau. sort/page/limit luon co (zod .default).
+ * `q` di qua normalizeText GIONG HET luc query DB — key theo `q` tho thi "Áo" va
+ * "áo" cache hai slot y het nhau. Field vang mat → chuoi rong, KHONG phai
+ * "undefined": `?minPrice=0` va `?minPrice=` phai ra khac nhau.
  */
 function paramsKey(q: ListProductQuery): string {
   return [
@@ -351,17 +307,13 @@ function paramsKey(q: ListProductQuery): string {
 
 /**
  * HAI TRUC DOC LAP, dung gop lam mot:
+ *  - `adminView` = AI hoi → quyet dinh SHAPE tra ve va NAMESPACE cache.
+ *  - `includeDeleted` = LOC GI → chi quyet dinh `where`.
  *
- *  - `adminView` = AI hoi. Quyet dinh SHAPE tra ve (AdminProduct co stock/
- *    deletedAt hay PublicProduct) va NAMESPACE cache.
- *  - `includeDeleted` = LOC GI. Chi quyet dinh `where`.
- *
- * Truoc day chi co mot co `includeDeleted` gánh ca hai viec, va do la mot BUG
- * that: admin mo bang voi o "hien ca hang da xoa" CHUA tick thi list map bang
- * toPublicProduct → khong co `stock`/`deletedAt` → man admin doc `deletedAt`
- * thay `undefined`, `undefined !== null` la TRUE nen MOI dong hien "Da xoa" kem
- * nut Khoi phuc, con cot ton kho trong tron. Bo loc khong duoc phep doi hop dong
- * du lieu cua endpoint.
+ * Truoc day mot co `includeDeleted` ganh ca hai viec, va do la BUG that: admin mo
+ * bang voi o "hien ca hang da xoa" CHUA tick thi nhan PublicProduct → FE doc
+ * `deletedAt` thay `undefined`, `undefined !== null` la TRUE nen MOI dong hien
+ * "Da xoa". Bo loc khong duoc phep doi hop dong du lieu cua endpoint.
  */
 async function list(
   query: ListProductQuery,
@@ -370,22 +322,17 @@ async function list(
   const { q, categoryId, minPrice, maxPrice, sort, page, limit } = query;
 
   const adminView = opts?.adminView ?? false;
-  // Chi nhanh admin moi duoc thay hang da xoa. `deletedAt: undefined` = Prisma bo
-  // qua dieu kien (tra ca hang song lan hang xoa); viet spread cho ro y do.
+  // Chi nhanh admin moi duoc thay hang da xoa.
   const includeDeleted = adminView && (opts?.includeDeleted ?? false);
 
   const where: Prisma.ProductWhereInput = {
     ...(!includeDeleted && { deletedAt: null }),
     ...(categoryId && { categoryId }),
-    // Search tren cot da bo dau, va PHAI normalize ca `q`: nguoi ta go "Áo" thi
-    // "áo" khong khop gi voi cot nameNormalized (dang chua "ao").
-    //
-    // KHONG dung `mode: "insensitive"` nhu doan mau o Roadmap dong 275 — doan do
-    // da bi chinh muc 3.2 bac bo, va la ly do cot nameNormalized ra doi. Hai ve
-    // deu da lowercase nen mode chi thua.
+    // Search tren cot da bo dau, va PHAI normalize ca `q`. KHONG dung
+    // `mode: "insensitive"` (doan mau Roadmap dong 275 da bi muc 3.2 bac bo — hai
+    // ve deu da lowercase nen mode chi thua).
     ...(q && { nameNormalized: { contains: normalizeText(q) } }),
-    // `!== undefined` chu KHONG phai `minPrice &&`: minPrice = 0 la falsy, dung
-    // truthy check thi `?minPrice=0` bi vut im lang.
+    // `!== undefined` chu KHONG phai `minPrice &&`: minPrice = 0 la falsy.
     ...((minPrice !== undefined || maxPrice !== undefined) && {
       price: {
         ...(minPrice !== undefined && { gte: minPrice }),
@@ -395,17 +342,15 @@ async function list(
   };
 
   const ver = await getVersion(VER_KEY);
-  // BAY POISONING: view admin va view public KHONG BAO GIO duoc dung chung key.
-  // Nhanh key bam theo `adminView`, KHONG theo `includeDeleted` — vi gio ca hai
-  // view deu tra ve shape rieng: neu admin?includeDeleted=false ma dung key public
-  // thi ban AdminProduct (co `stock`!) se nam trong o cache public va duoc phuc vu
+  // BAY POISONING: nhanh key bam theo `adminView`, KHONG theo `includeDeleted` — neu
+  // khong thi ban AdminProduct (co `stock`!) nam trong o cache public va duoc phuc vu
   // cho khach. `includeDeleted` van phai co MAT trong key vi no doi tap dong tra ve.
   const key = adminView
     ? `products:list:adm:${includeDeleted}:${ver}:${paramsKey(query)}`
     : `products:list:${ver}:${paramsKey(query)}`;
 
   return remember(key, LIST_TTL, async () => {
-    // 2 query song song — cung mot `where` de count va data khong the lech nhau.
+    // Cung mot `where` de count va data khong the lech nhau.
     const [total, rows] = await Promise.all([
       prisma.product.count({ where }),
       prisma.product.findMany({
@@ -417,11 +362,8 @@ async function list(
       }),
     ]);
 
-    // page vuot so trang → data rong + meta dung, KHONG phai 404. "Trang 999
-    // khong co gi" la mot cau tra loi hop le, khong phai loi.
+    // page vuot so trang → data rong + meta dung, KHONG phai 404.
     return {
-      // Shape bam theo NGUOI GOI (`adminView`), khong theo bo loc. AdminProduct
-      // la sieu tap cua PublicProduct nen van khop kieu tra ve.
       data: rows.map(adminView ? toAdminProduct : toPublicProduct),
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
@@ -429,9 +371,8 @@ async function list(
 }
 
 /**
- * Stream buffer len Cloudinary. upload_stream tra ve mot Writable — phai bom
- * buffer vao roi doi callback, khong co gi await san, nen boc trong Promise.
- * `resource_type: image` + folder co dinh de anh gom mot cho tren Cloudinary.
+ * upload_stream tra ve mot Writable — phai bom buffer vao roi doi callback, khong
+ * co gi await san, nen boc trong Promise.
  */
 function uploadToCloudinary(buffer: Buffer): Promise<UploadApiResponse> {
   return new Promise((resolve, reject) => {
@@ -451,12 +392,12 @@ async function addImage(productId: string, file: Express.Multer.File): Promise<P
   });
   if (!product) throw Errors.notFound("sản phẩm");
 
-  // Lop chan THAT: byte dau file phai dung la anh. Chan TRUOC khi cham
-  // Cloudinary — file gia khong bao gio duoc doc len storage.
+  // Lop chan THAT (mimetype client khai chi la lop re): byte dau file phai dung la
+  // anh. Chan TRUOC khi cham Cloudinary — file gia khong bao gio len storage.
   assertRealImage(file.buffer);
 
-  // sortOrder = so anh dang co → anh moi xep cuoi. Dem thay vi max+1: chua co
-  // tinh nang sap xep lai nen them tuan tu cho cung ket qua, ma don gian hon.
+  // Dem thay vi max+1: chua co tinh nang sap xep lai nen them tuan tu cho cung ket
+  // qua. Bay da biet: 2 upload dong thoi ra cung sortOrder.
   const sortOrder = await prisma.productImage.count({ where: { productId } });
 
   const uploaded = await uploadToCloudinary(file.buffer);
@@ -471,8 +412,6 @@ async function addImage(productId: string, file: Express.Multer.File): Promise<P
     select: { id: true, url: true, sortOrder: true },
   });
 
-  // Anh moi → product doi → cache detail/list cu lac hau. Dung chung version key
-  // voi buoc 3.
   await bumpVersion(VER_KEY);
 
   return image;
@@ -485,9 +424,8 @@ async function removeImage(productId: string, imageId: string) {
   });
   if (!image) throw Errors.notFound("ảnh");
 
-  // Xoa Cloudinary TRUOC, DB sau: neu Cloudinary fail thi DB con giu tham chieu,
-  // khong bo lai anh mo coi tren storage (Handbook 4.6). Thu tu nguoc lai chinh
-  // la cach lam ro ri anh cu day dan Cloudinary.
+  // Cloudinary TRUOC, DB SAU: destroy fail thi DB con giu tham chieu, khong bo lai
+  // anh mo coi tren storage (Handbook 4.6). Thu tu nguoc lai la cach ro ri anh cu.
   await cloudinary.uploader.destroy(image.publicId);
 
   await prisma.productImage.delete({ where: { id: image.id } });

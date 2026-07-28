@@ -7,9 +7,8 @@
 #   3. Seed du lieu demo neu DB con rong
 #   4. Doi cong 8080 sang PUBLIC (thu bang gh; that bai thi in huong dan tay)
 #
-# Chay lai duoc nhieu lan: .env da co thi GIU NGUYEN (khong sinh secret moi —
-# doi secret giua chung se lam moi refresh token dang song thanh vo dung), DB da
-# co san pham thi khong seed de.
+# Chay lai duoc nhieu lan: .env da co thi GIU NGUYEN (sinh secret moi se lam moi
+# refresh token dang song thanh vo dung), con seed thi idempotent.
 #
 # Test rieng phan sinh .env o may khac (khong build gi):
 #   REPO_DIR=/tmp/thu CODESPACE_NAME=abc-123 bash .devcontainer/setup.sh --env-only
@@ -36,9 +35,8 @@ fi
 # ─── 1. Sinh .env ───────────────────────────────────────────────────────────
 rand() { openssl rand -base64 48 | tr -d '\n=+/' | cut -c1-48; }
 
-# Mat khau tai khoan demo. KHONG dung mac dinh trong seed.ts (`Webpx@2024`):
-# demo nay mo cong khai ra Internet, dung lai mat khau ca nhan o day la sai
-# nguyen tac du no da nam san trong repo public.
+# KHONG dung mac dinh cua seed.ts: demo nay mo cong khai ra Internet, dung lai mat
+# khau ca nhan o day la sai nguyen tac du no da nam san trong repo public.
 SEED_PASSWORD="${SEED_PASSWORD:-Demo@12345}"
 
 if [ -f .env ]; then
@@ -72,9 +70,8 @@ CLIENT_URL=${CLIENT_URL}
 # Muon upload anh that: dat Codespaces secret CLOUDINARY_URL roi chay lai script.
 CLOUDINARY_URL=${CLOUDINARY_URL:-cloudinary://x:y@demo}
 
-# SMTP gia: worker se KHONG gui duoc email that. Voi ban demo thi khong sao —
-# dung tai khoan seed (da verified san) de dang nhap. Muon lay link verify cua
-# tai khoan moi dang ky, doc thang trong Redis:
+# SMTP gia: worker KHONG gui duoc email that — ban demo dung tai khoan seed (da
+# verified san). Muon lay link verify cua tai khoan moi dang ky thi doc trong Redis:
 #   docker exec shoplite-redis-prod redis-cli get bull:email:id
 #   docker exec shoplite-redis-prod redis-cli hget bull:email:<id> data
 SMTP_URL=${SMTP_URL:-smtp://user:pass@smtp.example.com:587}
@@ -84,8 +81,8 @@ SMTP_USER=${SMTP_USER:-user}
 SMTP_PASS=${SMTP_PASS:-pass}
 SMTP_FROM=ShopLite demo <no-reply@shoplite.dev>
 
-# Demo: 0 = thanh toan gia lap LUON thanh cong. Mac dinh cua app la 0.2 (20% don
-# bi tu choi) — dung o day thi khach vao xem se tuong site hong.
+# 0 = thanh toan gia lap LUON thanh cong. Mac dinh cua app la 0.2, de nguyen thi
+# khach vao xem se tuong site hong.
 PAYMENT_FAIL_RATE=0
 
 BCRYPT_COST=12
@@ -104,33 +101,27 @@ echo "▶ Build + deploy (lan dau ~5-10 phut tren may 2 core)..."
 ./deploy.sh
 
 # ─── 3. Seed du lieu demo ───────────────────────────────────────────────────
-# LUON chay, KHONG kiem "DB da co san pham chua" nua.
+# LUON chay, KHONG kiem "DB da co san pham chua". Guard cu dem
+# `select count(*) from products` va DA HONG THAT: mot lan seed chet giua chung de
+# lai dung 1 san pham, tu do moi lan sau deu thay "1 > 0" nen bo qua seed vinh vien —
+# demo mo ra chi co mot mon hang, khong mot dong log loi. Lay "co du lieu" lam bang
+# chung cho "da seed xong" thi khong phan biet duoc seed hoan tat voi seed do dang.
 #
-# Ban dau doan nay dem `select count(*) from products` roi bo qua seed neu > 0.
-# DA HONG THAT tren codespace dau tien (2026-07-27): mot lan seed chet giua chung
-# de lai DUNG 1 san pham, tu do moi lan chay sau deu thay "1 > 0" nen bo qua seed
-# VINH VIEN — demo mo ra chi co mot mon hang, va khong he co dong log loi nao.
+# Tien de cua viec bo guard la seed PHAI idempotent — va phai kiem cho chac: key cua
+# don tung bam tu `createdAt` nen chay lai la nhan doi don (17 → 31 → 45), da va bang
+# key co dinh trong seed.ts. Doi lai ~15 giay moi lan tao codespace, va seed hong
+# that thi `set -e` cho chet ngay kem log.
 #
-# Cai sai la o y tuong chu khong o dong code: lay "co du lieu" lam bang chung cho
-# "da seed xong" thi khong phan biet duoc seed hoan tat voi seed do dang. Chay
-# lai duoc vo han moi la thu bao ve that su.
-#
-# seed.ts idempotent tu dau den cuoi (user/category/product deu `upsert`, order
-# da ton tai thi bo qua) nen chay lai khong nhan doi gi. Doi lai: moi lan codespace
-# tao moi ton them ~15 giay. Va neu seed hong that thi `set -e` cho chet ngay o
-# day kem log, thay vi im lang di tiep roi de nguoi dung tu phat hien cua hang rong.
-#
-# Service `migrate` dung stage `migrator` (co prisma CLI + tsx) nen chay duoc
-# seed; image `api` co y khong mang CLI theo.
-# `-e SEED_PASSWORD`: service migrate khong co env_file nen phai truyen tay.
+# Service `migrate` dung stage `migrator` (co prisma CLI + tsx); image `api` co y
+# khong mang CLI theo. `-e SEED_PASSWORD` vi service migrate khong co env_file.
 echo "▶ Seed du lieu demo (idempotent — chay lai vo hai)..."
 docker compose -f docker-compose.prod.yml run --rm \
   -e SEED_PASSWORD="$SEED_PASSWORD" migrate npx prisma db seed
 
 # ─── 4. Mo cong ra ngoai ────────────────────────────────────────────────────
-# Mac dinh cong forward la PRIVATE: nguoi khac mo link se thay man hinh dang
-# nhap GitHub. `gh codespace ports visibility` can token co scope `codespace`,
-# ma token mac dinh trong codespace THUONG KHONG co → chuan bi san duong tay.
+# Cong forward mac dinh la PRIVATE (nguoi ngoai mo link se thay man hinh dang nhap
+# GitHub). `gh codespace ports visibility` can token co scope `codespace`, ma token
+# mac dinh trong codespace THUONG KHONG co → chuan bi san duong tay.
 PUBLIC_OK=""
 if [ -n "${CODESPACE_NAME:-}" ] && command -v gh >/dev/null 2>&1; then
   if gh codespace ports visibility "${HTTP_PORT}:public" -c "$CODESPACE_NAME" >/dev/null 2>&1; then

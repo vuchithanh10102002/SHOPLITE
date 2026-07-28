@@ -24,11 +24,9 @@ export const queryClient = new QueryClient({
   },
 
   /**
-   * Toast loi GLOBAL: loi nao component khong tu xu ly thi hien o day, lay
-   * message tieng Viet tu envelope chuan cua backend.
-   *
-   * Bo qua 401: da co interceptor refresh + RequireAuth lo: nem toast "Chua dang
-   * nhap" moi lan token het han la lam phien vo co.
+   * Toast loi GLOBAL cho loi nao component khong tu xu ly. Bo qua 401 vi da co
+   * interceptor refresh + RequireAuth lo — toast "Chua dang nhap" moi lan token het
+   * han la lam phien vo co.
    */
   queryCache: new QueryCache({
     onError: (error, query) => {

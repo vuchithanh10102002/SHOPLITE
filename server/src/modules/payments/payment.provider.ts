@@ -26,11 +26,11 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Cong thanh toan GIA LAP. Fail theo PAYMENT_FAIL_RATE de duong that bai duoc CHAY
- * THUONG XUYEN (Handbook 6.6) chu khong chi ton tai tren ly thuyet. Dat =1 de test
- * toan bo compensation, =0 khi demo.
+ * THUONG XUYEN (Handbook 6.6) chu khong chi ton tai tren ly thuyet: dat =1 de test
+ * compensation, =0 khi demo.
  *
- * Tach sau interface PaymentProvider: khi thay cong that (VNPay/MoMo/Stripe) chi
- * thay implementation nay + them webhook IPN, khong dung toi settlePayment.
+ * Tach sau interface PaymentProvider de khi thay cong that (VNPay/MoMo/Stripe) chi
+ * phai doi implementation nay + them webhook IPN, khong dung toi settlePayment.
  */
 export const paymentProvider: PaymentProvider = {
   async charge(_orderId, _amount) {

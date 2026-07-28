@@ -15,13 +15,11 @@ import { productFormSchema, toPayload, type ProductFormValues } from "../schemas
 import { ImageManager } from "../components/ImageManager";
 
 /**
- * MOT trang cho ca tao lan sua — phan biet bang co `:id` tren URL hay khong.
- * Hai trang rieng se la hai ban sao cua cung mot form, va cai thu hai luon quen
- * mot field khi ai do them cot moi.
+ * MOT trang cho ca tao lan sua (phan biet bang `:id` tren URL): hai trang rieng se la
+ * hai ban sao cua cung mot form, va cai thu hai luon quen mot field khi them cot moi.
  *
- * Anh chi quan ly duoc o che do SUA: upload la hai buoc (tao san pham → co id →
- * dinh anh). Trang tao xong se DIEU HUONG sang trang sua chu khong quay ve bang,
- * de admin dinh anh ngay khi con nho minh vua tao cai gi.
+ * Anh chi quan ly duoc o che do SUA vi upload la hai buoc (tao → co id → dinh anh).
+ * Tao xong DIEU HUONG sang trang sua chu khong quay ve bang, de admin dinh anh ngay.
  */
 export function AdminProductFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,12 +44,10 @@ export function AdminProductFormPage() {
   });
 
   /**
-   * Do du lieu vao form DUNG MOT LAN cho moi san pham.
-   *
-   * `reset()` moi lan `detail.data` doi la mot cai bay that: upload xong mot tam
-   * anh → invalidate → detail refetch → data la object moi → reset() → MOI thay
-   * doi admin dang go do (ten, gia, mo ta) bi xoa sach ma khong ai bao. Ref chot
-   * theo id nen doi sang san pham khac van do lai binh thuong.
+   * Do du lieu vao form DUNG MOT LAN cho moi san pham. `reset()` moi lan `detail.data`
+   * doi la mot cai bay that: upload xong mot tam anh → invalidate → refetch → object
+   * moi → reset() → MOI thay doi admin dang go do bi xoa sach ma khong ai bao. Ref
+   * chot theo id nen doi sang san pham khac van do lai binh thuong.
    */
   const hydratedFor = useRef<string | null>(null);
 

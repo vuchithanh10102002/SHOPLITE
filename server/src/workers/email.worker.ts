@@ -17,15 +17,10 @@ import {
 } from "../modules/emails/email.templates";
 
 /**
- * Xu ly mot job email.
+ * Tach ra khoi `new Worker(...)` de test goi thang duoc, khong can dung Redis that.
  *
- * Tach ra khoi `new Worker(...)` de test goi thang duoc — khong can dung Redis
- * that chi de kiem tra "job verify-email co render dung template khong".
- *
- * Giao keo voi BullMQ:
- * - NEM loi  → BullMQ retry theo attempts/backoff.
- * - Nem `UnrecoverableError` → BullMQ KHONG retry, day thang vao failed set.
- * - Return binh thuong → job xong.
+ * Giao keo voi BullMQ: nem loi → retry theo attempts/backoff; nem
+ * `UnrecoverableError` → KHONG retry, day thang vao failed set.
  */
 export async function processEmailJob(job: Job<EmailJobData, void, string>) {
   // requestId di theo payload → mot request_id grep ra duoc ca log cua API lan worker.
@@ -37,8 +32,8 @@ export async function processEmailJob(job: Job<EmailJobData, void, string>) {
   });
 
   if (!isEmailJobName(job.name)) {
-    // Job la vao queue (deploy lech phien ban, ai do add nham ten). Retry 3 lan
-    // cung khong lam ten job dung ra duoc → hong phi 3 lan cho.
+    // Job la vao queue (deploy lech phien ban, add nham ten): retry 3 lan cung
+    // khong lam ten job dung ra duoc.
     throw new UnrecoverableError(`Job type không hỗ trợ: ${job.name}`);
   }
 

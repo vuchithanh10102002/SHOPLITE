@@ -9,15 +9,12 @@ import { generateAccessToken } from "../../modules/auth/token.service";
 const ADDRESS = "123 Đường Test, Quận 1, TP.HCM";
 
 /**
- * Concurrency test (Phase 4 b8) — DoD cuối phase: chứng minh chốt chống oversell
- * (conditional UPDATE trong tx, order.service.ts b4) đứng vững dưới đua thật, KHÔNG
- * chỉ trên lý thuyết.
+ * DoD cuối Phase 4: chứng minh chốt chống oversell (conditional UPDATE trong tx)
+ * đứng vững dưới đua thật, không chỉ trên lý thuyết.
  *
- * Vì sao seed user thẳng qua prisma + tự ký token (không dùng register/login API):
- * /register giới hạn 5 req/60s, /login 10 req/60s THEO IP (rate-limit.ts). Supertest
- * đi từ một IP → tạo 50 user qua API sẽ ăn 429 ngay từ user thứ 6. Seed prisma bỏ
- * qua rate limit, bỏ luôn bcrypt (nhanh). Token khớp shape authenticate đọc:
- * { sub, role, verified } (token.service + auth.middleware).
+ * Seed user thẳng qua prisma + tự ký token thay vì gọi register/login: hai route đó
+ * giới hạn 5 và 10 req/60s THEO IP, mà supertest đi từ một IP → user thứ 6 ăn 429.
+ * Bỏ luôn bcrypt cho nhanh.
  */
 function tokenFor(userId: string, role = "CUSTOMER"): string {
   return generateAccessToken({ sub: userId, role, verified: true });

@@ -4,11 +4,10 @@ import { Errors } from "../../shared/errors";
 import { stockStatusOf, StockStatus } from "../../shared/stock";
 import { AddCartItemInput } from "./cart.schemas";
 
-// Lay product cua item KHONG loc deletedAt: product bi soft-delete van phai hien
-// trong gio (gan co isUnavailable) de frontend gach + chan checkout (BR5). Neu
-// loc deletedAt:null o day thi relation tra null → mat item hoac no. `price`/
-// `stock`/`deletedAt` la thong tin noi bo, chi dung de dung PublicCartItem —
-// khong tra thang ra ngoai.
+// KHONG loc deletedAt: product bi soft-delete van phai hien trong gio (gan co
+// isUnavailable) de frontend gach + chan checkout (BR5); loc `deletedAt: null` thi
+// relation tra null → mat item. `price`/`stock`/`deletedAt` chi dung de dung
+// PublicCartItem, khong tra thang ra ngoai.
 const cartItemSelect = {
   id: true,
   quantity: true,

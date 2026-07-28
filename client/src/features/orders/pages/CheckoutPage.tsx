@@ -22,13 +22,12 @@ export function CheckoutPage() {
   const createOrder = useCreateOrder();
 
   /**
-   * MOT key cho MOT lan vao trang thanh toan (Roadmap 5.1 buoc 6). Mang phu, bam
-   * hai lan, bam F5 giua chung → cung key → backend nhan ra "van lan dat do" va
-   * tra lai chinh don cu thay vi tao don thu hai.
+   * MOT key cho MOT lan vao trang thanh toan: mang phu, bam hai lan, F5 giua chung →
+   * cung key → backend tra lai chinh don cu thay vi tao don thu hai.
    *
-   * `[]` la co y: key doi theo moi render thi idempotency mat sach tac dung.
-   * Dat hang xong dieu huong sang /orders/:id nen component unmount — quay lai
-   * trang nay la mot lan dat MOI, khi do useMemo chay lai va sinh key khac.
+   * `[]` la co y — key doi theo moi render thi idempotency mat sach tac dung. Dat hang
+   * xong dieu huong sang /orders/:id nen component unmount, quay lai la mot lan dat
+   * MOI va useMemo sinh key khac.
    */
   const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
 

@@ -6,11 +6,9 @@ import { CacheResult, cacheDel, remember } from "../../lib/cache";
 import { CreateCategoryInput, UpdateCategoryInput } from "./category.schemas";
 
 /**
- * MOT key duy nhat — GET /categories khong co query param nao.
- *
- * Vi the o day dung DEL, KHONG dung version key: version key sinh ra de invalidate
- * cac key co vo so bien the query param ma khong phai SCAN (handbook 8.2). Mot key
- * thi DEL thang la xong. Version key se dung o products list (Phase 3 buoc 3).
+ * MOT key duy nhat — GET /categories khong co query param nao, nen DEL thang la
+ * xong. Version key (handbook 8.2) sinh ra de invalidate cac key co vo so bien the
+ * query param ma khong phai SCAN; cho do la products list.
  */
 const TREE_KEY = "categories:tree";
 
@@ -139,8 +137,8 @@ async function remove(id: string) {
 
   await prisma.category.update({ where: { id }, data: { deletedAt: new Date() } });
 
-  // Invalidate SAU khi DB ghi xong. Xoa cache truoc khi ghi la tu ban chan: giua
-  // hai buoc do co request khac doc DB (con du lieu cu) roi nap lai cache cu.
+  // Invalidate SAU khi DB ghi xong: xoa truoc khi ghi thi giua hai buoc do co
+  // request khac doc DB (con du lieu cu) roi nap lai chinh cai cu vao cache.
   await cacheDel(TREE_KEY);
 
   return { message: "Đã xóa danh mục" };
@@ -172,12 +170,7 @@ async function loadTree(): Promise<CategoryNode[]> {
   return roots;
 }
 
-/**
- * Tra kem `hit` de controller ghi cache_hit vao request log.
- *
- * Service KHONG dung toi `res` — no khong duoc biet gi ve Express. Controller la
- * cho duy nhat noi hai the gioi do gap nhau.
- */
+/** Tra kem `hit` de controller ghi cache_hit vao log — service khong biet gi ve `res`. */
 async function getTree(): Promise<CacheResult<CategoryNode[]>> {
   return remember(TREE_KEY, TREE_TTL, loadTree);
 }

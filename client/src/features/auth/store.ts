@@ -2,21 +2,15 @@ import { create } from "zustand";
 import type { User } from "@/api/types";
 
 /**
- * Store auth — CLIENT STATE duy nhat cua du an (Handbook 7.1). Moi thu khac
- * (products, cart, orders) la SERVER STATE va do TanStack Query giu, khong copy
- * vao day.
+ * CLIENT STATE duy nhat cua du an (Handbook 7.1) — products/cart/orders la SERVER
+ * STATE do TanStack Query giu, khong copy vao day.
  *
- * VI SAO access token nam trong memory chu khong localStorage: XSS doc duoc
- * localStorage bang mot dong `localStorage.getItem`. Bien trong module closure thi
- * khong co API nao doc ra duoc tu ngoai. Danh doi: F5 la mat token → App goi
- * /auth/refresh dung mot lan luc khoi dong de lay lai (cookie httpOnly con do).
+ * Access token nam trong memory chu khong localStorage: XSS doc localStorage bang
+ * mot dong, con bien trong module closure thi khong co API nao doc ra duoc. Danh
+ * doi: F5 mat token → goi /auth/refresh mot lan luc khoi dong (cookie httpOnly con).
  *
- * `status` phan biet BA trang thai, khong phai hai:
- *   "loading"  — dang goi /refresh luc boot, CHUA biet co phien hay khong
- *   "authed"   — co token
- *   "anon"     — chac chan chua dang nhap
- * Thieu "loading" thi RequireAuth se da user ra /login ngay khi F5 — bug kinh dien
- * cua kieu luu token trong memory.
+ * `status` phai co BA gia tri, khong phai hai: thieu "loading" (dang goi /refresh
+ * luc boot, CHUA biet co phien khong) thi RequireAuth da user ra /login ngay khi F5.
  */
 export type AuthStatus = "loading" | "authed" | "anon";
 
@@ -48,10 +42,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   setAnonymous: () => set({ accessToken: null, user: null, status: "anon" }),
 }));
 
-/**
- * Doc token NGOAI React (axios interceptor). getState() lay gia tri hien tai,
- * khong subscribe — dung o day moi dung, hook chi dung trong component.
- */
+/** Doc token NGOAI React (axios interceptor): getState() khong subscribe. */
 export const getAccessToken = () => useAuthStore.getState().accessToken;
 
 export const isAdmin = (user: User | null) => user?.role === "ADMIN";

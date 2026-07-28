@@ -1,15 +1,11 @@
 import { useEffect, useState } from "react";
 
 /**
- * Tra ve `value` sau khi no NGUNG doi trong `delay` ms (Roadmap 5.1 buoc 5:
- * search debounce 400ms).
+ * Tra ve `value` sau khi no NGUNG doi trong `delay` ms — go "noi com dien" ma moi
+ * phim mot request la 12 request, 11 cai vut di va an rate-limit oan.
  *
- * Vi sao can: moi phim go ma ban mot request thi go "noi com dien" = 12 request,
- * 11 cai vut di — va an rate-limit oan. Debounce khien chi lan go CUOI di tiep.
- *
- * cleanup clearTimeout la phan quan trong nhat: moi lan `value` doi, timer cu bi
- * huy TRUOC khi dat timer moi. Thieu dong do thi timer cu van no → van gui request
- * cua gia tri cu.
+ * clearTimeout trong cleanup la phan quan trong nhat: thieu no thi timer cu van no
+ * va van gui request cua gia tri cu.
  */
 export function useDebounce<T>(value: T, delay = 400): T {
   const [debounced, setDebounced] = useState(value);

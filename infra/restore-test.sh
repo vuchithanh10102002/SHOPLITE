@@ -50,18 +50,17 @@ fi
 echo "▶ Dien tap khoi phuc: $(basename "$DUMP")  →  $DST_CONTAINER/$TEST_DB"
 
 # ─── 1. DB dich sach ────────────────────────────────────────────────────────
-# Role owner phai ton tai TRUOC: dump co san cac lenh `ALTER ... OWNER TO
-# <user>`, thieu role thi ON_ERROR_STOP=1 se dung ngay (dung y do — nhung day
-# la thieu sot cua may dich, khong phai cua ban backup).
+# Role owner phai ton tai TRUOC: dump co san `ALTER ... OWNER TO <user>`, thieu role
+# thi ON_ERROR_STOP=1 dung ngay — dung y do, nhung do la thieu sot cua may dich chu
+# khong phai cua ban backup.
 docker exec "$DST_CONTAINER" psql -U postgres -q -c "DROP DATABASE IF EXISTS $TEST_DB;" >/dev/null
 docker exec "$DST_CONTAINER" psql -U postgres -q -c \
   "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='$PG_USER') THEN CREATE ROLE $PG_USER LOGIN; END IF; END \$\$;" >/dev/null
 docker exec "$DST_CONTAINER" psql -U postgres -q -c "CREATE DATABASE $TEST_DB OWNER $PG_USER;" >/dev/null
 
 # ─── 2. Khoi phuc ───────────────────────────────────────────────────────────
-# `if !` chu khong de `set -e` tu giet: chet ngang thi khong ai in ra ket luan,
-# nguoi doc log chi thay mot dong ERROR cua psql roi tu suy dien. Da bi mot lan
-# khi thu voi ban dump cat ngang (thoat ma 3, khong co dong "THAT BAI" nao).
+# `if !` chu khong de `set -e` tu giet: chet ngang thi khong ai in ket luan, nguoi
+# doc log chi thay mot dong ERROR cua psql roi tu suy dien (da bi mot lan).
 if ! gunzip -c "$DUMP" | docker exec -i "$DST_CONTAINER" \
        psql -U postgres -d "$TEST_DB" -v ON_ERROR_STOP=1 -q >/dev/null; then
   echo "✗ DIEN TAP THAT BAI: khong restore noi ban nay (dump hong hoac cat ngang)."

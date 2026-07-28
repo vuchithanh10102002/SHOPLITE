@@ -1,32 +1,26 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // Demo ShopLite tren GitHub Codespaces (Phase 8, ban thay the huong VPS).
 //
-// Vi sao Codespaces: Oracle Cloud Always Free / Railway / Fly.io deu bat xac
-// minh THE TIN DUNG. Codespaces free 120 core-hours/thang khong can the, va cap
-// san mot URL HTTPS that (https://<ten-codespace>-8080.app.github.dev) nen
-// khong can ten mien, khong can certbot.
-//
-// Kien truc KHONG phai sua gi de chay duoc o day: moi thu di qua MOT cong nginx
-// (`/api` proxy sang api) → FE va API cung origin → cookie httpOnly refreshToken
-// van di ve binh thuong, khong dinh CORS/SameSite.
+// Vi sao Codespaces: Oracle Cloud Always Free / Railway / Fly.io deu bat xac minh
+// THE TIN DUNG. Codespaces free 120 core-hours/thang khong can the, va cap san URL
+// HTTPS that nen khong can ten mien, khong can certbot. Kien truc khong phai sua gi:
+// moi thu di qua MOT cong nginx nen FE va API cung origin, cookie httpOnly van di ve
+// binh thuong.
 //
 // ═══ BA RANG BUOC PHAI NHO ═══
-// 1. Cong forward mac dinh la PRIVATE. Nguoi ngoai mo link se dinh man hinh
-//    dang nhap GitHub chu khong thay ShopLite. Phai doi sang PUBLIC —
-//    setup.sh thu doi bang `gh`, that bai thi in huong dan doi tay.
+// 1. Cong forward mac dinh la PRIVATE — nguoi ngoai mo link se dinh man hinh dang
+//    nhap GitHub. setup.sh thu doi bang `gh`, that bai thi in huong dan doi tay.
 //
-//    KHONG dat duoc trong file nay: `portsAttributes` cua devcontainer chi ho
-//    tro `label` / `onAutoForward` / `protocol`... — de nghi them `visibility`
-//    van chua duoc implement (community discussion #10394, kiem lai 2026-07-27).
-//    Da co y KHONG viet `"visibility": "public"` vao day: no se bi lo di trong
-//    im lang, dung kieu bay "cau hinh khong co tac dung" ma project nay ne.
+//    KHONG dat duoc trong file nay: `portsAttributes` chi ho tro `label` /
+//    `onAutoForward` / `protocol`, de nghi them `visibility` van chua implement
+//    (community discussion #10394, kiem lai 2026-07-27). Da co y KHONG viet
+//    `"visibility": "public"` vao day — no se bi lo di trong im lang.
 //
-// 2. URL DOI moi lan tao codespace moi → `CLIENT_URL` phai sinh dong tu
-//    $CODESPACE_NAME (setup.sh lo), KHONG duoc hardcode. Dat sai thi link
-//    trong email verify/reset bam khong duoc.
+// 2. URL DOI moi lan tao codespace → `CLIENT_URL` sinh dong tu $CODESPACE_NAME
+//    (setup.sh lo), KHONG hardcode. Sai thi link trong email verify bam khong duoc.
 //
-// 3. Codespace TU NGU sau ~30 phut khong ai dung. Ngu day thi container tu len
-//    lai (postStartCommand). Nen KHONG dung URL nay lam dich giam sat uptime.
+// 3. Codespace TU NGU sau ~30 phut. Ngu day thi container tu len lai
+//    (postStartCommand) — dung dung URL nay lam dich giam sat uptime.
 // ═══════════════════════════════════════════════════════════════════════════
 {
   "name": "ShopLite — demo stack production",
@@ -35,9 +29,8 @@
   // universal nang ~30GB, keo dai luc tao codespace, ma o day chi can docker.
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
 
-  // Toan bo stack (nginx + api + worker + postgres + redis) chay bang docker
-  // BEN TRONG codespace. Cong ma compose publish (8080) nam ngay tren network
-  // namespace cua codespace nen Codespaces forward duoc.
+  // Ca stack chay bang docker BEN TRONG codespace; cong compose publish nam ngay
+  // tren network namespace cua codespace nen Codespaces forward duoc.
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {}
   },

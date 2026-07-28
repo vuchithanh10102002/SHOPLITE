@@ -11,19 +11,18 @@ interface SettleInput {
 }
 
 /**
- * Finalize don PENDING (da tru kho o b4). Goi cong thanh toan NGOAI transaction —
- * khong giu connection DB mo trong luc cho I/O 200-800ms (chiem connection, khoa
- * row). Sau khi co ket qua chay transaction thu 2 ghi lai:
+ * Finalize don PENDING (da tru kho). Goi cong thanh toan NGOAI transaction — khong
+ * giu connection DB mo trong luc cho I/O 200-800ms — roi transaction thu 2 ghi lai:
  *   OK   → order PAID + payment COMPLETED + history
  *   FAIL → hoan kho tung item + order CANCELLED + payment FAILED + history (BR2)
  *
- * Moi UPDATE order deu kem `status='PENDING'` (rowCount===0 → bo qua toan bo):
- * chong DOUBLE-PROCESS khi job quet don treo (b7) da CANCELLED truoc, hoac lo goi
+ * Moi UPDATE order deu kem `status='PENDING'` (rowCount===0 → bo qua toan bo) de
+ * chong DOUBLE-PROCESS khi job quet don treo da CANCELLED truoc, hoac lo goi
  * finalize hai lan. `payments.order_id` UNIQUE la lop chot chong double-charge.
  *
- * Ham nay KHONG nem loi nghiep vu (declined) — don da chuyen CANCELLED goi la xong.
- * Chi nem loi HE THONG (mang/DB) de caller/job xu ly; luc do don ket PENDING va
- * job quet don treo (b7) don sau. Day la khoang ho da biet (Handbook 6.5 Q3).
+ * KHONG nem loi nghiep vu (declined) — don da chuyen CANCELLED goi la xong. Chi nem
+ * loi HE THONG; luc do don ket PENDING va job quet don treo don sau — khoang ho da
+ * biet (Handbook 6.5 Q3).
  */
 async function settlePayment(order: SettleInput): Promise<void> {
   let txnId: string;

@@ -1,9 +1,6 @@
 import { Response } from "express";
 
-/**
- * Meta cho response danh sach (list). Phase 3 tro di dung cho GET /products...
- * De o day de moi cho phan trang deu tra cung mot shape.
- */
+/** De o day de moi cho phan trang deu tra cung mot shape. */
 export interface PageMeta {
   page: number;
   limit: number;
@@ -12,15 +9,13 @@ export interface PageMeta {
 }
 
 /**
- * Envelope thanh cong — doi xung voi errorHandler ({ success:false, error }).
+ * Envelope thanh cong — doi xung voi errorHandler ({ success:false, error }). Co
+ * field `success` du da co HTTP status de frontend chi doc MOT cho la biet
+ * thanh/bai, interceptor xu ly mot lan cho ca hai duong.
  *
- * Vi sao co field `success` du da co HTTP status: frontend chi can doc mot cho
- * (`res.data.success`) de biet thanh/bai, khong phai vua doan theo status vua
- * doan theo shape. Loi va thanh cong cung mot "hop dong", interceptor xu ly 1 lan.
- *
- *   sendSuccess(res, { accessToken, user })        → 200 { success:true, data }
- *   sendSuccess(res, user, 201)                     → 201 { success:true, data }
- *   sendSuccess(res, products, 200, meta)           → 200 { success:true, data, meta }
+ *   sendSuccess(res, { accessToken, user })  → 200 { success:true, data }
+ *   sendSuccess(res, user, 201)              → 201 { success:true, data }
+ *   sendSuccess(res, products, 200, meta)    → 200 { success:true, data, meta }
  */
 export function sendSuccess<T>(
   res: Response,

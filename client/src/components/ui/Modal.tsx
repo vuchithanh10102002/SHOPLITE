@@ -3,16 +3,14 @@ import { createPortal } from "react-dom";
 import { Button } from "./Button";
 
 /**
- * Modal tu viet (~60 dong) thay vi keo them thu vien: man admin chi can HAI cong
- * dung — hoi xac nhan truoc hanh dong kho lui, va khung form nho.
+ * Modal tu viet thay vi keo them thu vien: man admin chi can hoi xac nhan truoc hanh
+ * dong kho lui, va khung form nho.
  *
- * KHONG dung window.confirm(): no CHAN toan bo tab (giong alert) va khong style
- * duoc; tren automation/browser tool no con lam treo phien. Da co ghi chu ve bay
- * dialog nay tu Phase 5.
+ * KHONG dung window.confirm(): no CHAN toan bo tab va khong style duoc; tren
+ * automation/browser tool con lam treo phien.
  *
- * createPortal ra thang document.body: modal nam trong mot <td> se an duoi
- * `overflow` cua bang cha, va z-index cua no bi ke thua stacking context cua
- * dong bang — hai loi rat kho doan.
+ * createPortal ra thang document.body: modal nam trong mot <td> se an duoi `overflow`
+ * cua bang cha, va z-index bi ke thua stacking context cua dong bang.
  */
 export function Modal({
   open,

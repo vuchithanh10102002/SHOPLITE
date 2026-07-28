@@ -23,14 +23,12 @@ import { useDashboard } from "../hooks";
 import type { DashboardData, OrderStatus } from "@/api/types";
 
 /**
- * Mau cua VACH DU LIEU, khong phai mau thuong hieu.
+ * Mau cua VACH DU LIEU, khong phai mau thuong hieu: `--color-primary` (#065f46)
+ * truot check "chroma floor" — o dang net 2px hay thanh nho no doc ra gan nhu xam.
+ * #047857 la buoc ke ben trong CUNG ho mau va qua du kiem tra.
  *
- * `--color-primary` (#065f46) truot check "chroma floor" cua bo kiem palette:
- * o dang mot net mong 2px hay mot thanh nho, no doc ra gan nhu xam. #047857 la
- * buoc ke ben trong CUNG ho mau (dang la --color-primary-hover cua theme) va qua
- * du sau kiem tra voi nen sang. Ca hai bieu do chi co MOT chuoi du lieu nen
- * khong can bang mau phan loai, va cung vi the khong can legend — tieu de da noi
- * ro dang ve cai gi.
+ * Ca hai bieu do chi co MOT chuoi du lieu nen khong can bang mau phan loai, cung vi
+ * the khong can legend.
  */
 const MARK = "#047857";
 const MARK_MUTED = "#a7d7c5"; // cac cot khong phai top-1 o bieu do ngang

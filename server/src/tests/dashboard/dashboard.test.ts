@@ -5,12 +5,11 @@ import { createLoggedInAdmin, createLoggedInUser } from "../helpers/auth";
 import { prisma } from "../../lib/prisma";
 
 /**
- * GET /api/admin/dashboard (Phase 6 bước 5).
+ * GET /api/admin/dashboard.
  *
- * Seed don THANG QUA PRISMA chu khong qua POST /orders: dashboard chi DOC DB,
- * va di duong API thi moi don deu chay qua payment (auto-settle) nen khong dat
- * duoc du 5 trang thai + khong dat duoc `createdAt` lui ve qua khu — ma bieu do
- * 30 ngay thi phai co du lieu o nhieu ngay khac nhau moi kiem duoc.
+ * Seed don THANG QUA PRISMA chu khong qua POST /orders: di duong API thi moi don deu
+ * auto-settle nen khong dat duoc du 5 trang thai, va khong lui duoc `createdAt` ve
+ * qua khu — ma bieu do 30 ngay phai co du lieu o nhieu ngay khac nhau moi kiem duoc.
  */
 
 const AUTH = (t: string) => ({ Authorization: `Bearer ${t}` });

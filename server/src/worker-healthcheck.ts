@@ -7,17 +7,15 @@
  *
  * BA DIEU PHAI GIU KHI SUA FILE NAY:
  *
- * 1. KHONG import `lib/redis` dung chung. Ket noi do dat `maxRetriesPerRequest:
- *    null` cho BullMQ — nghia la thu lai VO HAN. Redis chet thi healthcheck se
- *    treo cho toi khi Docker giet vi timeout, tuc la mat 5 giay de noi mot dieu
- *    dang le biet ngay. O day dung ket noi rieng, khong thu lai.
+ * 1. KHONG import `lib/redis` dung chung: ket noi do dat `maxRetriesPerRequest:
+ *    null` cho BullMQ = thu lai VO HAN → Redis chet thi healthcheck treo den luc bi
+ *    Docker giet. O day dung ket noi rieng, khong thu lai.
  *
- * 2. KHONG import `config/env`. File do validate TOAN BO bien moi truong; thieu
- *    mot bien khong lien quan (CLOUDINARY_URL chang han) la healthcheck do trong
- *    khi worker van chay tot — bao dong gia.
+ * 2. KHONG import `config/env`: file do validate TOAN BO bien moi truong, thieu mot
+ *    bien khong lien quan la healthcheck do trong khi worker van chay tot.
  *
- * 3. Phai TU CHET som hon timeout cua Docker (5s trong compose). Mot healthcheck
- *    treo la healthcheck vo dung.
+ * 3. Phai TU CHET som hon timeout cua Docker (5s trong compose) — healthcheck treo
+ *    la healthcheck vo dung.
  */
 import Redis from "ioredis";
 import { HEARTBEAT_KEY, isHeartbeatFresh } from "./lib/worker-heartbeat";

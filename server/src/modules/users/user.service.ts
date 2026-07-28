@@ -21,8 +21,8 @@ const userSelect = {
   emailVerified: true,
   isActive: true,
   createdAt: true,
-  // Dem don de admin biet tai khoan nay co lich su mua hang hay khong truoc khi
-  // khoa. `_count` la mot query JOIN duy nhat, khong phai N+1.
+  // De admin biet tai khoan co lich su mua hang khong truoc khi khoa. `_count` la
+  // mot query JOIN duy nhat, khong phai N+1.
   _count: { select: { orders: true } },
 } satisfies Prisma.UserSelect;
 
@@ -60,11 +60,9 @@ async function listUsers(query: ListUserQuery): Promise<{ data: PublicUser[]; me
   const where: Prisma.UserWhereInput = {
     ...(role !== undefined && { role }),
     ...(isActive !== undefined && { isActive }),
-    // `mode: "insensitive"` (ILIKE) o day la DUNG, khac product. Product co cot
-    // `nameNormalized` da bo dau nen tim "ao" ra "Áo" — user khong co cot do,
-    // ILIKE it nhat cho tim khong phan biet HOA/thuong. Bo dau van khong tim
-    // duoc ("thanh" khong ra "Thành") — chap nhan o man admin, nguoi dung thuong
-    // tim bang email.
+    // `mode: "insensitive"` o day la DUNG, khac product: user khong co cot
+    // `nameNormalized` da bo dau. Doi lai "thanh" khong ra "Thành" — chap nhan o man
+    // admin, nguoi ta thuong tim bang email.
     ...(q !== undefined && {
       OR: [
         { email: { contains: q, mode: "insensitive" } },
@@ -73,15 +71,13 @@ async function listUsers(query: ListUserQuery): Promise<{ data: PublicUser[]; me
     }),
   };
 
-  // count + findMany song song: hai query doc lap, khong co ly do cho tuan tu.
   const [total, rows] = await Promise.all([
     prisma.user.count({ where }),
     prisma.user.findMany({
       where,
       select: userSelect,
-      // Khoa phu `id`: nhieu user tao cung mot giay (vd seed) thi orderBy
-      // createdAt khong xac dinh thu tu giua chung → trang 2 lap dong cua trang 1.
-      // Cung ly do da chot o product list.
+      // Khoa phu `id`: nhieu user tao cung mot giay (vd seed) thi thu tu khong xac
+      // dinh → trang 2 lap dong cua trang 1. Cung ly do voi product list.
       orderBy: [{ createdAt: "desc" }, { id: "asc" }],
       skip: (page - 1) * limit,
       take: limit,
@@ -95,20 +91,15 @@ async function listUsers(query: ListUserQuery): Promise<{ data: PublicUser[]; me
 }
 
 /**
- * Khoa/mo tai khoan.
- *
- * Vi sao MOT endpoint nhan `isActive` thay vi hai route block/unblock: xem
- * updateUserStatusSchema. Bam hai lan ra cung ket qua (idempotent).
+ * Khoa/mo tai khoan. MOT endpoint nhan `isActive` thay vi hai route block/unblock
+ * (xem updateUserStatusSchema) → bam hai lan ra cung ket qua.
  *
  * Hai chan, deu co chu dich:
- *  - KHONG khoa duoc tai khoan ADMIN (ke ca chinh minh): mot admin gian doi khoa
- *    het cac admin con lai la khoa cung he thong, khong con ai mo ra duoc. Muon
- *    ha mot admin thi doi role o DB truoc — viec do co y khong nam trong UI.
- *  - Khoa xong REVOKE het refresh token cua nguoi do. Neu khong, ho van o trong
- *    phien cu: `/auth/refresh` co kiem `isActive` (auth.service) nen se hong,
- *    nhung access token da phat thi song them toi da 15 phut. Revoke cat duong
- *    gia han; 15 phut con lai la khoang ho da biet, doi lay viec khong phai tra
- *    ve DB moi request.
+ *  - KHONG khoa duoc tai khoan ADMIN (ke ca chinh minh): mot admin khoa het cac
+ *    admin con lai la khoa cung he thong. Muon ha mot admin thi doi role o DB truoc.
+ *  - Khoa xong REVOKE het refresh token: khong thi ho van o trong phien cu them toi
+ *    da 15 phut (access token da phat). Revoke cat duong gia han; 15 phut con lai la
+ *    khoang ho da biet, doi lay viec khong phai tra ve DB moi request.
  */
 async function setUserStatus(userId: string, isActive: boolean): Promise<PublicUser> {
   const user = await prisma.user.findUnique({

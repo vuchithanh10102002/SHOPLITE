@@ -13,9 +13,8 @@ export const listUserQuerySchema = z.object({
   // khong tim duoc — chap nhan o man admin (xem user.service.ts).
   q: z.preprocess(blankToUndefined, z.string().trim().max(200).optional()),
   role: z.preprocess(blankToUndefined, z.enum(["CUSTOMER", "ADMIN"]).optional()),
-  // KHONG z.coerce.boolean(): Boolean("false") === true → `?isActive=false` lai ra
-  // true (bug im lang). So khop chuoi tuong minh — cung cai bay da chot o
-  // listProductQuerySchema.includeDeleted.
+  // KHONG z.coerce.boolean(): `Boolean("false") === true` → `?isActive=false` lai ra
+  // true. Cung cai bay da chot o listProductQuerySchema.includeDeleted.
   isActive: z.preprocess(
     blankToUndefined,
     z
@@ -43,12 +42,11 @@ export const userIdSchema = z.object({
 });
 
 /**
- * Khoa/mo tai khoan. Body la JSON nen `isActive` la boolean THAT — khong dinh bay
- * chuoi "false" nhu ben query string.
+ * Body la JSON nen `isActive` la boolean THAT — khong dinh bay chuoi "false" nhu
+ * ben query string.
  *
- * Nhan ca hai chieu trong MOT endpoint (`{ isActive: false }` = khoa,
- * `true` = mo) thay vi hai route block/unblock: client noi RO trang thai muon co,
- * bam hai lan cung ra mot ket qua (idempotent), khong phai "toggle" ma hai admin
+ * MOT endpoint nhan ca hai chieu thay vi hai route block/unblock: client noi RO
+ * trang thai muon co, bam hai lan ra cung ket qua — khong phai "toggle" ma hai admin
  * bam cung luc thi lat qua lat lai.
  */
 export const updateUserStatusSchema = z.object({

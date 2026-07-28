@@ -1,14 +1,12 @@
 import { z } from "zod";
 
 /**
- * CHEP tu server/src/modules/products/product.schemas.ts — cung rule, cung
- * message tieng Viet (Handbook 7.3: validate hai lan, backend la chot cuoi).
- * Sua ben backend thi sua ca o day.
+ * CHEP tu server/src/modules/products/product.schemas.ts (Handbook 7.3: validate hai
+ * lan, backend la chot cuoi). Sua ben backend thi sua ca o day.
  *
- * KHAC ban backend mot cho co chu dich: backend co them
- * `.refine(slugify(name).length > 0)` — FE khong chep vi phai keo ca ham slugify
- * sang. Ten kieu "!!!" se bi backend tra 400 va form hien message do; hiem va
- * khong dang doi lay mot ban sao slugify de lech.
+ * KHAC mot cho co chu dich: backend co them `.refine(slugify(name).length > 0)`, FE
+ * khong chep vi phai keo ca ham slugify sang. Ten kieu "!!!" se bi backend tra 400 va
+ * form hien message do — hiem, khong dang doi lay mot ban sao slugify de lech.
  */
 const MAX_PRICE = 9_999_999_999.99;
 
@@ -21,11 +19,8 @@ export const productFormSchema = z.object({
 
   categoryId: z.uuid("Vui lòng chọn danh mục"),
 
-  /**
-   * <input type="number"> qua react-hook-form `valueAsNumber` cho ra NaN khi o
-   * trong. z.number() TU LOAI NaN (khong phai "expected number, received nan"
-   * kho hieu — o day dat message tieng Viet cho ca hai truong hop).
-   */
+  // <input type="number"> qua `valueAsNumber` cho ra NaN khi o trong; z.number() tu
+  // loai NaN nhung message mac dinh kho hieu nen dat lai tieng Viet.
   price: z
     .number({ error: "Giá phải là số" })
     .positive("Giá phải lớn hơn 0")

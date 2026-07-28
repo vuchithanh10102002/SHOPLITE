@@ -3,12 +3,9 @@ import { cn } from "@/lib/cn";
 import type { OrderHistory } from "@/api/types";
 
 /**
- * Timeline doc dung LICH SU THAT tu bang order_status_history (backend ghi moi
- * lan doi trang thai), khong phai bon buoc co dinh ve san roi to mau.
- *
- * Khac biet quan trong: don bi HUY khong di het cac buoc — ve khung co dinh se
- * hien "Đang giao" mo mo nhu thu sap xay ra, trong khi no se KHONG BAO GIO xay
- * ra. Ve theo lich su thi moc cuoi la su that cuoi cung.
+ * Ve dung LICH SU THAT tu bang order_status_history, khong phai bon buoc co dinh to
+ * mau san: don bi HUY khong di het cac buoc, ve khung co dinh se hien "Đang giao" mo
+ * mo nhu thu sap xay ra trong khi no se KHONG BAO GIO xay ra.
  *
  * `history` da duoc backend sap theo createdAt tang dan.
  */

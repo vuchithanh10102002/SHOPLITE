@@ -3,12 +3,10 @@ import { useAuthStore } from "@/features/auth/store";
 import type { ApiError, ApiSuccess, SessionResponse } from "./types";
 
 /**
- * baseURL "/api" + Vite proxy (vite.config.ts) — CHOT MOT CACH, khong dat them
- * host tuyet doi o day (Roadmap 5.2 canh bao lan giua 2 cach). Request di cung
- * origin voi trang → cookie httpOnly `refreshToken` tu dong dinh kem.
- *
- * withCredentials: van bat du cung-origin, de khi doi sang deploy khac domain
- * (khong qua proxy) thi khong phai nho quay lai sua.
+ * baseURL "/api" + Vite proxy — CHOT MOT CACH, khong dat them host tuyet doi o day
+ * (Roadmap 5.2 canh bao lan giua 2 cach). Cung origin voi trang → cookie httpOnly
+ * `refreshToken` tu dong dinh kem. `withCredentials` van bat du cung-origin, de doi
+ * sang deploy khac domain thi khong phai nho quay lai sua.
  */
 export const api = axios.create({
   baseURL: "/api",
@@ -29,12 +27,9 @@ api.interceptors.request.use((config) => {
 type RetriableConfig = AxiosRequestConfig & { _retried?: boolean };
 
 /**
- * Gop N request 401 dong thoi thanh MOT lan refresh.
- *
- * Vi sao bat buoc: refresh token cua backend co ROTATION + REUSE DETECTION. Neu 3
- * request cung 401 va cung goi /refresh, request thu 2 se gui refresh token vua bi
- * xoay → backend coi la "token da revoke ma van dung" = ke gian → REVOKE CA FAMILY
- * → nguoi dung bi da van ra ngoai. Bien `refreshing` la thu duy nhat chan chuyen do.
+ * Gop N request 401 dong thoi thanh MOT lan refresh — BAT BUOC vi backend co ROTATION
+ * + REUSE DETECTION: request thu hai se gui refresh token vua bi xoay, backend coi la
+ * ke gian va REVOKE CA FAMILY → nguoi dung bi da van ra ngoai.
  */
 let refreshing: Promise<string> | null = null;
 
@@ -70,9 +65,8 @@ api.interceptors.response.use(null, async (error: AxiosError<ApiError>) => {
       original.headers = { ...original.headers, Authorization: `Bearer ${token}` };
       return api(original); // phat lai request goc
     } catch {
-      // Refresh cung hong (cookie het han / bi revoke / reuse detection) → het
-      // duong. Xoa phien de RequireAuth day ve /login. KHONG navigate o day:
-      // module nay nam ngoai React, dieu huong la viec cua router.
+      // Refresh cung hong → xoa phien de RequireAuth day ve /login. KHONG navigate o
+      // day: module nay nam ngoai React, dieu huong la viec cua router.
       useAuthStore.getState().clearSession();
     }
   }

@@ -51,12 +51,10 @@ export function useAdminProduct(id: string) {
 }
 
 /**
- * Sau moi lan ghi, PHAI don ca hai phia cache:
- *  - `adminProductKeys.all`: bang admin dang mo.
- *  - `productKeys.all`: catalog cua khach (danh sach + trang chi tiet). Backend
- *    da bump version key cua Redis nen server tra du lieu moi, nhung cache trong
- *    TRINH DUYET thi khong ai bump ho — thieu dong nay, admin sua gia xong mo tab
- *    cua hang van thay gia cu va tuong backend hong.
+ * Sau moi lan ghi PHAI don CA HAI phia cache: bang admin dang mo, va catalog cua
+ * khach. Backend da bump version key cua Redis nen server tra du lieu moi, nhung
+ * cache trong TRINH DUYET thi khong ai bump ho — thieu `productKeys.all` thi admin
+ * sua gia xong mo tab cua hang van thay gia cu va tuong backend hong.
  */
 function useInvalidateProducts() {
   const queryClient = useQueryClient();

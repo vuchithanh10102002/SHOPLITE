@@ -49,13 +49,10 @@ export async function authenticate(
 }
 
 /**
- * Chan theo role. LUON dat sau `authenticate` — no doc `req.user` do authenticate gan.
+ * Chan theo role. LUON dat sau `authenticate` — no doc `req.user`.
  *
- *   router.post("/", authenticate, requireRole("ADMIN"), ...)
- *
- * 403 chu khong phai 404: user da dang nhap hop le, chi la khong du quyen. Giau
- * su ton tai cua resource (tra 404) chi co nghia khi ban than URL la bi mat —
- * /api/categories thi khong.
+ * 403 chu khong phai 404: user da dang nhap hop le, chi la khong du quyen. Giau su
+ * ton tai cua resource chi co nghia khi ban than URL la bi mat.
  */
 export function requireRole(...roles: string[]) {
   return (req: Request, _res: Response, next: NextFunction) => {
@@ -67,14 +64,11 @@ export function requireRole(...roles: string[]) {
 }
 
 /**
- * Chan neu email chua xac thuc (BR4: chua verify van login/gom gio duoc, nhung
- * KHONG dat hang duoc). LUON dat sau `authenticate` — doc `req.user.verified` do
- * authenticate lay tu claim trong access token.
+ * BR4: chua verify van login/gom gio duoc nhung KHONG dat hang duoc. LUON dat sau
+ * `authenticate` — doc `req.user.verified` lay tu claim trong access token.
  *
- *   router.post("/", authenticate, requireVerified, ...)
- *
- * 403 EMAIL_NOT_VERIFIED (khac 403 FORBIDDEN cua role) → frontend phan biet duoc
- * "cần xác thực email" voi "khong du quyen" de hien dung thong bao.
+ * 403 EMAIL_NOT_VERIFIED (khac 403 FORBIDDEN cua role) de frontend phan biet "can
+ * xac thuc email" voi "khong du quyen".
  */
 export function requireVerified(req: Request, _res: Response, next: NextFunction) {
   if (!req.user) return next(Errors.unauthorized());

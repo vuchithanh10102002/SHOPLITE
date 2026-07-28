@@ -1,16 +1,13 @@
 import { Prisma } from "@prisma/client";
 
 /**
- * Hoan kho tung item (cong tra so luong da tru luc dat hang). Dung chung o:
- *   - settlePayment nhanh FAIL (b5): thanh toan that bai → tra kho
- *   - huy don (b6): khach huy / admin chuyen CANCELLED → tra kho (BR2)
- * Mot cho de logic khong lech nhau.
+ * Hoan kho tung item — dung chung cho settlePayment nhanh FAIL, khach huy don va
+ * admin chuyen CANCELLED (BR2), de ba cho khong lech nhau.
  *
- * `increment` sinh `UPDATE ... SET stock = stock + n` — nguyen tu, khong doc-roi-ghi.
- * Khong can dieu kien (cong kho luon thanh cong), khac voi TRU kho luc dat hang
- * phai co `WHERE stock >= n` chong oversell.
+ * `increment` sinh `UPDATE ... SET stock = stock + n`, nguyen tu, khong can dieu
+ * kien — khac TRU kho luc dat hang phai co `WHERE stock >= n` chong oversell.
  *
- * Nhan `tx` (KHONG phai prisma goc) de nam trong CUNG transaction voi buoc doi
+ * Nhan `tx` chu KHONG phai prisma goc, de nam trong CUNG transaction voi buoc doi
  * trang thai don — rollback thi kho cung tra lai nguyen.
  */
 export async function restockItems(

@@ -57,11 +57,9 @@ describe("Product admin: khôi phục + detail theo id (Phase 6)", () => {
 
   // ── GET /api/products/admin (list) ────────────────────────────────────────
   //
-  // BUG THAT da xay ra: shape tra ve bam theo bo loc `includeDeleted` thay vi
-  // theo vai nguoi goi, nen admin mo bang voi o "hien ca hang da xoa" CHUA tick
-  // thi nhan PublicProduct — thieu `stock` va `deletedAt`. Man admin doc
-  // `p.deletedAt !== null` ra `undefined !== null` = TRUE nen MOI dong hien
-  // "Da xoa" kem nut Khoi phuc, cot ton kho trong tron.
+  // BUG THAT da xay ra: shape tra ve bam theo bo loc `includeDeleted` thay vi theo
+  // vai nguoi goi → admin chua tick "hien ca hang da xoa" thi nhan PublicProduct,
+  // thieu `stock`/`deletedAt`, va MOI dong hien "Da xoa" vi `undefined !== null`.
 
   it("list admin KHÔNG kèm includeDeleted vẫn trả `stock` + `deletedAt`", async () => {
     const res = await api.get("/api/products/admin").set(AUTH(adminToken)).expect(200);

@@ -143,14 +143,10 @@ export interface Order {
   history: OrderHistory[];
   payment: Payment | null; // null truoc khi finalize
   /**
-   * Cac trang thai di tiep duoc TU trang thai hien tai, do BACKEND tinh tu
-   * TRANSITIONS (server/src/modules/orders/order.state.ts).
-   *
-   * Roadmap 6.1 buoc 3 goi y de mot file `shared/orderState.ts` cho ca hai ben
-   * import. Backend da chon duong khac — tra bang API — vi client/ va server/ la
-   * hai project npm roi va Phase 7 build image bang `docker build ./server`, file
-   * o goc repo se nam ngoai build context. Ket qua quan trong hon duong di: FE
-   * KHONG giu mot ban sao nao cua state machine, nen dropdown khong the lech.
+   * Do BACKEND tinh tu TRANSITIONS (server/src/modules/orders/order.state.ts) va tra
+   * qua API, thay vi mot file `shared/orderState.ts` nhu Roadmap 6.1 goi y (client/ va
+   * server/ la hai project npm roi, ma Phase 7 build bang `docker build ./server`).
+   * Ket qua moi la thu quan trong: FE KHONG giu ban sao nao cua state machine.
    */
   allowedTransitions: OrderStatus[];
 }
@@ -158,14 +154,12 @@ export interface Order {
 // ─── Admin ────────────────────────────────────────────────────────────────
 
 /**
- * GET /api/products/admin (list) va GET /api/products/admin/:id (detail).
- * = Product cong hai field CHI admin thay: `deletedAt` (biet dong nao da xoa) va
- * `stock` (con so that, de do vao form sua — `stockStatus` khong du).
+ * = Product cong hai field CHI admin thay: `deletedAt` va `stock` (con so that de do
+ * vao form sua — `stockStatus` khong du).
  *
- * LUU Y: POST/PATCH /api/products van tra ve `Product` THUONG (khong stock,
- * khong deletedAt) — hop dong cu, backend co test khoa lai. Nen sau khi luu form
- * phai invalidate query admin de doc lai, khong duoc nhet response vao cache
- * admin (se mat stock).
+ * LUU Y: POST/PATCH /api/products van tra `Product` THUONG (backend co test khoa hop
+ * dong nay) → sau khi luu form phai invalidate query admin de doc lai, khong duoc
+ * nhet response vao cache admin (se mat stock).
  */
 export interface AdminProduct extends Product {
   deletedAt: string | null;

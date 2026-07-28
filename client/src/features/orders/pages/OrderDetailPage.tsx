@@ -11,13 +11,11 @@ import { formatDateTime, formatVnd } from "@/lib/format";
 import type { OrderStatus } from "@/api/types";
 
 /**
- * BR2: chi don CHUA giao moi huy duoc. Danh sach nay phai khop bang TRANSITIONS
- * ben backend (order.state.ts): SHIPPED/COMPLETED/CANCELLED khong con duong sang
- * CANCELLED. Neu hien nut o trang thai khac, nguoi dung bam roi an 409 — loi tu
- * gay ra.
+ * BR2: chi don CHUA giao moi huy duoc. Mang nay phai khop TRANSITIONS ben backend —
+ * hien nut o trang thai khac thi nguoi dung bam roi an 409, loi tu gay ra.
  *
- * TODO (da ghi trong order.state.ts): khi tach shared/ cho monorepo thi import
- * thang TRANSITIONS thay vi chep lai mang nay.
+ * Day la ban sao DUY NHAT cua state machine con sot lai o FE: order detail da tra san
+ * `allowedTransitions`, doc `CANCELLED` trong do thi bo han duoc mang nay.
  */
 const CANCELLABLE: OrderStatus[] = ["PENDING", "PAID"];
 

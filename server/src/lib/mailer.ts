@@ -15,16 +15,10 @@ export const transporter = nodemailer.createTransport({
 });
 
 /**
- * Gui mail — DUNG DANG PROMISE, tuyet doi khong truyen callback.
- *
- * Ban cu goi `transporter.sendMail(opts, callback)`: khi truyen callback,
- * nodemailer KHONG tra ve promise nua → `await` cua caller resolve ngay lap tuc,
- * va loi SMTP bi nuot trong callback (`console.log(error)` roi thoi).
- * Hau qua: worker luon bao job THANH CONG du email chua bao gio duoc gui →
- * attempts/backoff cua BullMQ vo dung, failed set vinh vien rong.
- *
- * Loi phai NEM RA NGOAI thi BullMQ moi biet duong retry. Do la toan bo giao keo
- * giua worker va queue.
+ * DUNG DANG PROMISE, tuyet doi khong truyen callback: co callback thi nodemailer
+ * KHONG tra promise nua → `await` cua caller resolve ngay, loi SMTP bi nuot trong
+ * callback, worker luon bao job THANH CONG du email chua bao gio duoc gui (attempts/
+ * backoff cua BullMQ thanh vo dung). Loi phai NEM RA NGOAI thi BullMQ moi retry.
  */
 export async function sendMail(to: string, email: RenderedEmail) {
   const info = await transporter.sendMail({

@@ -8,14 +8,13 @@ const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 /**
  * Memory storage: buffer nam trong RAM, KHONG cham disk cua API (Handbook 5.7 —
- * chong upload shell + DoS disk). Buffer di thang len Cloudinary roi bi vut.
+ * chong upload shell + DoS disk), di thang len Cloudinary roi bi vut.
  *
- * fileFilter chan theo mimetype (client TU KHAI) — chi la lop chan 1, re va som.
- * Lop chan THAT la assertRealImage (magic bytes) o service. Mimetype sai thi nem
- * AppError 400 → errorHandler tra envelope 400 chuan.
+ * fileFilter chan theo mimetype CLIENT TU KHAI nen chi la lop chan re va som; lop
+ * chan THAT la assertRealImage (magic bytes) o service.
  *
- * fileSize vuot han → multer tu nem MulterError code LIMIT_FILE_SIZE;
- * errorHandler dich sang 400 (khong thi rot 500).
+ * Vuot fileSize → multer nem MulterError LIMIT_FILE_SIZE, errorHandler dich sang
+ * 400 (khong co nhanh do thi rot 500).
  */
 export const uploadSingle = multer({
   storage: multer.memoryStorage(),

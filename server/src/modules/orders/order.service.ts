@@ -46,18 +46,11 @@ export interface PublicOrder {
   history: PublicOrderHistory[];
   payment: PublicPayment | null; // null truoc khi finalize; co sau b5
   /**
-   * Cac trang thai di tiep duoc TU trang thai hien tai — lay thang tu TRANSITIONS
-   * (order.state.ts, nguon chan ly cua BR1).
-   *
-   * Vi sao tra ve thay vi de FE tu giu mot ban sao (Roadmap 6.1 buoc 3 goi y file
-   * shared): client/ va server/ la hai project npm roi, va Phase 7 build image
-   * bang `docker build ./server` — file dung chung o goc repo se nam NGOAI build
-   * context. Tra qua API thi dropdown admin KHONG THE lech voi state machine, du
-   * hai ben deploy lech phien ban.
-   *
-   * Day la thong tin quy tac, khong phai quyen: chan that su van la
-   * assertTransition trong adminUpdateStatus. FE khach hang dung no cho nut "Huy
-   * don" (huy duoc <=> CANCELLED nam trong danh sach nay).
+   * Lay thang tu TRANSITIONS (order.state.ts, nguon chan ly BR1). Tra qua API thay
+   * vi de FE giu ban sao (Roadmap 6.1 goi y file shared) vi client/ va server/ la
+   * hai project npm roi, ma Phase 7 build bang `docker build ./server` — file o goc
+   * repo se nam NGOAI build context. Thong tin quy tac, KHONG phai quyen: chan that
+   * su van la assertTransition trong adminUpdateStatus.
    */
   allowedTransitions: OrderStatus[];
 }
@@ -155,11 +148,8 @@ function toPublicOrderSummary(row: OrderSummaryRow): PublicOrderSummary {
  * Dat hang — TRAI TIM cua phase (Handbook 6.5). Chong oversell bang conditional
  * UPDATE trong transaction, idempotent qua Idempotency-Key.
  *
- * Tra ve { order, replayed }: replayed=true khi la lan goi lai cung key (khong
- * tao don moi) → controller van tra 200/201 binh thuong, khong bao loi.
- *
- * Luu y: don dung o PENDING sau buoc nay. Goi payment (→ PAID / hoan kho +
- * CANCELLED) lam o b5, NGOAI transaction nay.
+ * `replayed=true` khi la lan goi lai cung key (khong tao don moi) → controller tra
+ * 200 thay vi 201, khong bao loi.
  */
 async function createOrder(
   userId: string,
@@ -200,10 +190,10 @@ async function createOrder(
   try {
     const created = await prisma.$transaction(
       async (tx) => {
-        // 2. Tru kho tung item bang CONDITIONAL UPDATE (check-and-set nguyen tu).
-        // KHONG SELECT-roi-IF-roi-UPDATE (TOCTOU race). KHONG updateMany (khong
-        // biet item nao fail). rowCount === 0 nghia la stock < quantity HOAC vua
-        // bi xoa → throw → auto ROLLBACK ca cac tru kho truoc do.
+        // 2. Tru kho bang CONDITIONAL UPDATE (check-and-set nguyen tu). KHONG
+        // SELECT-roi-IF-roi-UPDATE (TOCTOU), KHONG updateMany (khong biet item nao
+        // fail). rowCount === 0 = het hang hoac vua bi xoa → throw → ROLLBACK ca
+        // cac tru kho truoc do.
         for (const item of cart.items) {
           const affected = await tx.$executeRaw`
             UPDATE products SET stock = stock - ${item.quantity}, updated_at = now()
@@ -213,8 +203,8 @@ async function createOrder(
           if (affected === 0) throw Errors.insufficientStock(item.product.name);
         }
 
-        // 3. Total tinh o SERVER bang Decimal (khong tin so client gui). Gia lay
-        // tu DB (product.price), nhan so luong, cong don — khong dinh sai so float.
+        // 3. Total tinh o SERVER bang Decimal, gia lay tu DB — khong tin so client
+        // gui, va khong dinh sai so float.
         const total = cart.items.reduce(
           (sum, i) => sum.plus(i.product.price.times(i.quantity)),
           new Prisma.Decimal(0),
@@ -249,31 +239,29 @@ async function createOrder(
       { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
     );
 
-    // Ghi chu chu dich: KHONG bumpVersion(products) o day du stock da doi. Order la
-    // ghi cua customer, rat thuong xuyen — bump moi don se dap sach cache product
-    // lien tuc, hong muc dich cache. stockStatus hien thi tre toi da 60s (TTL) la
-    // chap nhan duoc; chan cung that su nam o conditional UPDATE tren, khong o cache.
+    // CHU DICH khong bumpVersion(products) du stock da doi: order la ghi cua
+    // customer, rat thuong xuyen — bump moi don se dap sach cache product lien tuc.
+    // stockStatus tre toi da 60s (TTL) chap nhan duoc; chan cung nam o conditional
+    // UPDATE tren, khong o cache.
 
-    // FINALIZE (b5): goi thanh toan NGOAI tx tru kho → PAID hoac hoan kho +
-    // CANCELLED. Don dong bo o day nen response phan anh trang thai cuoi.
+    // Thanh toan NGOAI tx tru kho → PAID hoac hoan kho + CANCELLED. Dong bo nen
+    // response phan anh trang thai cuoi.
     await paymentService.settlePayment({
       id: created.id,
       totalAmount: created.totalAmount,
       items: created.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
     });
 
-    // Email SAU khi settle va NGOAI moi transaction — email khong hoan tac duoc
-    // neu tx rollback. Payload chi mang orderId; worker doc DB → trang thai THAT
-    // (PAID/CANCELLED) tai luc gui. Ca duong thanh cong lan that bai deu bao.
+    // Email NGOAI moi transaction — email khong hoan tac duoc neu tx rollback.
+    // Payload chi mang orderId; worker doc DB → trang thai THAT tai luc gui.
     await emailQueue.add("order-status", { orderId: created.id });
 
     // Doc lai detail de phan anh status cuoi + payment record vua tao trong settle.
     return { order: await loadDetail(created.id), replayed: false };
   } catch (e) {
-    // 6. RACE cung idempotency key: 2 request cung vao (ca hai thay "chua ton tai"
-    // o buoc 1), 1 thang, 1 vuong UNIQUE(userId, key) → P2002. Con lai roll back
-    // sach (ke ca tru kho). Tra ve don ke thang da tao → client thay ket qua nhat
-    // quan du goi 2 lan.
+    // 6. RACE cung idempotency key: ca hai request deu thay "chua ton tai" o buoc 1,
+    // ke thua vuong UNIQUE(userId, key) → P2002, roll back sach ke ca tru kho. Tra
+    // ve don cua ke thang → client thay ket qua nhat quan du goi 2 lan.
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       const winner = await prisma.order.findUnique({
         where: { userId_idempotencyKey: { userId, idempotencyKey } },
@@ -341,10 +329,9 @@ async function cancelOrder(userId: string, orderId: string): Promise<PublicOrder
   if (!order || order.userId !== userId) throw Errors.notFound("đơn hàng");
 
   await prisma.$transaction(async (tx) => {
-    // Conditional: chi huy khi con PENDING/PAID. updateMany tra `count` — count===0
-    // nghia la don da SHIPPED/COMPLETED/CANCELLED (BR2: SHIPPED khong huy qua he
-    // thong) HOAC vua bi doi trang thai boi request khac (race) → 409. Chinh dieu
-    // kien `status in` nay chan double-cancel: lan huy thu 2 thay CANCELLED → count 0.
+    // count===0 = don da SHIPPED/COMPLETED/CANCELLED HOAC vua bi doi boi request
+    // khac (race) → 409. Chinh dieu kien `status in` nay chan double-cancel (va do
+    // do chan hoan kho hai lan): lan huy thu 2 thay CANCELLED → count 0.
     const { count } = await tx.order.updateMany({
       where: { id: orderId, status: { in: [OrderStatus.PENDING, OrderStatus.PAID] } },
       data: { status: OrderStatus.CANCELLED },
@@ -415,9 +402,8 @@ async function adminUpdateStatus(
   return loadDetail(orderId);
 }
 
-// Summary cho admin: kem userId + email de biet don cua ai, va allowedTransitions
-// de dropdown doi trang thai ngay tren bang chi hien buoc chuyen hop le (Roadmap
-// 6.1 buoc 3) — khong phai mo trang chi tiet moi biet doi duoc sang dau.
+// Kem userId + email de biet don cua ai, va allowedTransitions de dropdown ngay
+// tren bang chi hien buoc chuyen hop le — khong phai mo trang chi tiet moi biet.
 export interface AdminOrderSummary extends PublicOrderSummary {
   userId: string;
   userEmail: string;
@@ -477,14 +463,12 @@ async function adminListOrders(
 }
 
 /**
- * SYSTEM: quét đơn PENDING treo quá `thresholdMinutes` → hoàn kho + CANCELLED
- * (b7). Vá khoảng hở đã biết: process chết giữa tx trừ kho (b4) và settle (b5) →
- * đơn kẹt PENDING đã trừ kho. Luồng thường settle ĐỒNG BỘ nên PENDING chỉ tồn tại
- * khi có sự cố → an toàn để coi PENDING-quá-hạn là "hỏng, cần hoàn kho".
+ * SYSTEM: quét đơn PENDING treo quá `thresholdMinutes` → hoàn kho + CANCELLED. Vá
+ * khoảng hở: process chết giữa tx trừ kho và settle → đơn kẹt PENDING đã trừ kho.
+ * Luồng thường settle ĐỒNG BỘ nên PENDING chỉ tồn tại khi có sự cố.
  *
  * Mỗi đơn MỘT transaction riêng (đơn lỗi không kéo cả mẻ). Conditional
- * `WHERE status='PENDING'` (count===0 → bỏ qua): nếu đơn vừa được settle sang PAID
- * ngay trước sweep thì KHÔNG đụng — chống đua với settle. Trả về số đơn đã hủy.
+ * `WHERE status='PENDING'` chống đua với settle. Trả về số đơn đã hủy.
  */
 async function cancelStalePendingOrders(thresholdMinutes = 15): Promise<number> {
   const cutoff = subMinutes(new Date(), thresholdMinutes);

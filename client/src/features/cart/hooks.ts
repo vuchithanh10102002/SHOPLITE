@@ -41,15 +41,12 @@ async function mutateCart(request: Promise<{ data: ApiSuccess<Cart> }>): Promise
 }
 
 /**
- * Khuon optimistic dung chung cho nut +/- va nut xoa item: sua cache TRUOC, goi
- * API sau. Bam "+" ma phai cho mang moi thay so nhay la cam giac cham nhat cua
- * mot gio hang.
- *
- * Ba moc bat buoc (Roadmap 5.1 buoc 6):
- *   onMutate  — huy query dang bay (khong thi response cu ve sau se ghi de ban
- *               optimistic vua dat), luu ban cu de con duong lui
- *   onError   — tra lai ban cu NGAY (invalidate cung refetch nhung mat vai tram
- *               ms, trong luc do man hinh dang hien so sai) roi moi dong bo lai
+ * Khuon optimistic dung chung cho nut +/- va nut xoa item: sua cache TRUOC, goi API
+ * sau. Ba moc bat buoc (Roadmap 5.1 buoc 6):
+ *   onMutate  — huy query dang bay (khong thi response cu ve sau ghi de ban optimistic
+ *               vua dat), luu ban cu de con duong lui
+ *   onError   — tra lai ban cu NGAY; invalidate cung refetch nhung mat vai tram ms, ma
+ *               trong luc do man hinh dang hien so sai
  *   onSuccess — lay gio that tu server, khong tu suy dien
  */
 function useOptimisticCart<TVars>(

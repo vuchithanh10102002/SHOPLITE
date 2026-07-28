@@ -9,12 +9,11 @@ import type { Role } from "@/api/types";
  * middleware backend. Ai xoa guard nay van chi nhan 401/403 tu API.
  *
  * Ba nhanh, khong phai hai:
- *  - status "loading": dang goi /auth/refresh luc boot → CHUA biet gi, phai CHO.
- *    Neu bo nhanh nay, moi lan F5 o /orders user se bi da ve /login trong chop mat
- *    roi moi quay lai — bug kinh dien cua kieu giu token trong memory.
+ *  - "loading" (dang goi /auth/refresh luc boot) → phai CHO. Bo nhanh nay thi moi lan
+ *    F5 o /orders user bi da ve /login trong chop mat roi moi quay lai.
  *  - chua dang nhap → /login?from=... de dang nhap xong quay lai dung cho.
- *  - sai role → trang 403, KHONG phai redirect /login: user DA dang nhap roi, day
- *    ho ve login la sai thong diep va ho se dang nhap lai vo ich.
+ *  - sai role → trang 403, KHONG redirect /login: user DA dang nhap roi, day ho ve
+ *    login la sai thong diep va ho se dang nhap lai vo ich.
  */
 export function RequireAuth({ role }: { role?: Role }) {
   const status = useAuthStore((s) => s.status);

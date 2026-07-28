@@ -5,13 +5,11 @@ import { createLoggedInAdmin, createLoggedInUser, refreshWith } from "../helpers
 import { prisma } from "../../lib/prisma";
 
 /**
- * Quan ly nguoi dung phia admin (Phase 6 buoc 4): GET /api/admin/users +
- * PATCH /api/admin/users/:id/status.
+ * GET /api/admin/users + PATCH /api/admin/users/:id/status.
  *
- * Seed user THANG QUA PRISMA chu khong qua /register: rate limit register la
- * 5 request/60s tren MOT IP, ma supertest di chung mot IP — tao user thu 6 la
- * an 429 va test do vi ly do khong lien quan. Cung bo luon bcrypt cho nhanh
- * (khong test nao o day dang nhap bang cac tai khoan seed).
+ * Seed user THANG QUA PRISMA chu khong qua /register: rate limit 5 request/60s tren
+ * MOT IP, ma supertest di chung mot IP → user thu 6 an 429 va test do vi ly do
+ * khong lien quan. Bo luon bcrypt cho nhanh.
  */
 
 const AUTH = (t: string) => ({ Authorization: `Bearer ${t}` });

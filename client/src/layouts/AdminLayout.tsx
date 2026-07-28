@@ -6,12 +6,11 @@ import { useLogout } from "@/features/auth/hooks";
 import { cn } from "@/lib/cn";
 
 /**
- * Khung khu quan tri (Roadmap 6.1 buoc 1). Tach hoan toan khoi MainLayout: khong
- * gio hang, khong nav mua sam — day la mot cong cu lam viec, khong phai cua hang.
+ * Khung khu quan tri, tach hoan toan khoi MainLayout: khong gio hang, khong nav mua
+ * sam — day la cong cu lam viec, khong phai cua hang.
  *
- * Guard KHONG nam o day ma o <RequireAuth role="ADMIN"> boc ben ngoai trong
- * App.tsx: layout chi lo giao dien. Nho vay sai quyen thi thay trang 403 SACH,
- * khong phai mot sidebar admin rong tuech.
+ * Guard nam o <RequireAuth role="ADMIN"> boc ben ngoai trong App.tsx chu khong o day,
+ * de sai quyen thi thay trang 403 SACH thay vi mot sidebar admin rong tuech.
  */
 const NAV = [
   { to: "/admin", label: "Tổng quan", icon: LayoutDashboard, end: true },

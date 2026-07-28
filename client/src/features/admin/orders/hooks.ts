@@ -26,14 +26,11 @@ export function useAdminOrders(params: AdminOrderParams) {
 }
 
 /**
- * Doi trang thai don (PATCH /api/admin/orders/:id/status).
- *
  * Backend tra ve don SAU khi doi, kem `allowedTransitions` moi — nen chi can
- * invalidate la bang tu cap nhat ca trang thai lan cac lua chon trong dropdown.
+ * invalidate la bang tu cap nhat ca trang thai lan lua chon trong dropdown.
  *
- * Invalidate CA `orderKeys.all` (khu cua khach): admin doi PAID → SHIPPED thi
- * trang "Don hang cua toi" cua chinh admin do, neu dang mo o tab khac, phai thay
- * trang thai moi. Re, va tranh mot lop bug "so lieu hai man khong khop".
+ * Invalidate CA `orderKeys.all` (khu cua khach) de trang "Don hang cua toi" dang mo o
+ * tab khac khong hien trang thai cu.
  */
 export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();

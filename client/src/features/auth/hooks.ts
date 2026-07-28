@@ -34,24 +34,19 @@ export function useRegister() {
 }
 
 /**
- * Xac thuc email — CO Y dung useQuery chu khong useMutation, du la POST.
+ * CO Y dung useQuery chu khong useMutation, du la POST: man nay khong co nut bam, mo
+ * link trong mail la chay ngay. Voi useMutation phai tu goi trong useEffect + mot ref
+ * chan goi hai lan, va chinh cap do sinh ra bug — StrictMode thao/lap lai component →
+ * observer moi cua useMutation ve `idle` trong khi ref van bat nen khong ai goi lai →
+ * man hinh KET O SPINNER vinh vien du API da chay xong. Da gap that.
  *
- * Man nay khong co nut bam: mo link trong mail la chay ngay. Voi useMutation thi
- * phai tu goi trong useEffect + mot ref chan goi hai lan (StrictMode) — va chinh
- * cap do sinh ra bug: StrictMode thao/lap lai component → observer moi cua
- * useMutation ve trang thai `idle`, trong khi ref van dang bat nen khong ai goi
- * lai → man hinh KET O SPINNER vinh vien du API da chay xong (tai khoan da verify
- * that, chi UI khong biet). Da gap that khi chay DoD Phase 5.
+ * useQuery khong dinh vi ket qua nam trong QueryCache theo `queryKey`, lan mount thu
+ * hai doc lai cache do.
  *
- * useQuery khong dinh: ket qua nam trong QueryCache theo `queryKey`, lan mount thu
- * hai doc lai dung cache do — vua khong goi API hai lan (token dung MOT lan roi
- * tieu), vua hien dung ket qua.
- *
- * Cac option deu la BAT BUOC, khong phai trang tri: token da bi tieu sau lan goi
- * dau nen MOI lan goi lai deu 400 → refetch bat ky (focus/mount/reconnect) se bien
- * man "thanh cong" thanh "that bai". staleTime Infinity + tat het refetch = chay
- * dung mot lan. `meta.silent` de QueryCache.onError khong toast trung — trang nay
- * da tu ve khung loi rieng.
+ * Cac option deu BAT BUOC, khong phai trang tri: token tieu sau lan goi dau nen MOI
+ * lan goi lai deu 400 → refetch bat ky (focus/mount/reconnect) bien "thanh cong"
+ * thanh "that bai". `meta.silent` de QueryCache.onError khong toast trung — trang nay
+ * tu ve khung loi rieng.
  */
 export function useVerifyEmail(token: string | null) {
   return useQuery({

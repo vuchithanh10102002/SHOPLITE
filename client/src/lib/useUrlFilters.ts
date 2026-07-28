@@ -5,17 +5,13 @@ import { useSearchParams } from "react-router-dom";
  * Bo loc song trong URL (Handbook 7.1) — F5 giu nguyen ket qua, copy link gui cho
  * nhau thi ben kia thay dung cai minh dang xem.
  *
- * Rut ra tu ProductsPage (Phase 5) khi man admin can dung y het bon lan nua. Ban
- * goc trong ProductsPage giu nguyen, khong sua mot trang da verify tay chi de
- * dung chung ham.
+ * BAY QUAN TRONG NHAT nam o `resetPage` (Roadmap 6.2, loi dau bang): doi bo loc ma
+ * khong ve trang 1 thi nguoi dang o trang 5 loc lai con 2 trang → xin page=5 →
+ * backend tra mang rong → man hinh bao "khong co du lieu" trong khi thuc te co. MAC
+ * DINH la reset; chi nut phan trang truyen resetPage=false.
  *
- * BAY QUAN TRONG NHAT nam o `resetPage` (Roadmap 6.2, loi dau bang): doi bo loc
- * ma khong ve trang 1 thi nguoi dang o trang 5 loc lai con 2 trang → xin page=5 →
- * backend tra mang rong → man hinh bao "khong co du lieu" trong khi thuc te co.
- * Nen MAC DINH la reset; chi rieng nut phan trang truyen resetPage=false.
- *
- * Xoa han key khi gia tri rong (thay vi de `?q=`): URL sach va khop cach backend
- * coi chuoi rong la "khong loc" (blankToUndefined trong cac *.schemas.ts).
+ * Xoa han key khi gia tri rong (thay vi de `?q=`) cho khop cach backend coi chuoi
+ * rong la "khong loc" (blankToUndefined trong cac *.schemas.ts).
  */
 export function useUrlFilters() {
   const [params, setParams] = useSearchParams();

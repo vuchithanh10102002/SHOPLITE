@@ -1,29 +1,12 @@
 /**
- * prisma/seed.ts — ShopLite
+ * Dữ liệu mẫu cho ShopLite. Idempotent từ đầu tới cuối — chạy lại không nhân đôi gì.
  *
- * Chạy:   npx prisma db seed
- * Reset:  npx prisma migrate reset (xóa + migrate lại + seed)
- *
- * SCHEMA yêu cầu tối thiểu — đảm bảo prisma/schema.prisma có đủ:
- *
- *   enum Role          { CUSTOMER ADMIN }
- *   enum OrderStatus   { PENDING PAID SHIPPED COMPLETED CANCELLED }
- *   enum PaymentStatus { COMPLETED FAILED REFUNDED }
- *   enum EmailTokenType{ VERIFY RESET }
- *
- * Sau khi thêm enum: npx prisma migrate dev --name add-enums && npx prisma generate
- *
- * PACKAGE cần có trong server/package.json (dependencies):
- *   bcrypt
- * (dev dependencies):
- *   @types/bcrypt  @types/node
- *
- * tsconfig.json cần có:
- *   "types": ["node"]   (hoặc bỏ trường types để TS tự tìm)
+ *   npx prisma db seed
+ *   npx prisma migrate reset   (xóa + migrate lại + seed)
  */
 
-// Không import crypto để tránh xung đột tsconfig giữa prisma/ và src/.
-// Dùng hàm tự viết — đủ cho mục đích seed (không cần cryptographic randomness).
+// Không import crypto để tránh xung đột tsconfig giữa prisma/ và src/. Hàm tự viết
+// là đủ cho seed (không cần cryptographic randomness).
 function randomHex(bytes: number): string {
   const chars = '0123456789abcdef';
   let result = '';
@@ -47,9 +30,8 @@ function deterministicHash(input: string): string {
   return Math.abs(combined).toString(16).padStart(16, '0').repeat(4).substring(0, 36);
 }
 
-// ─── Third-party ───────────────────────────────────────────────────────────────
-// `bcrypt` (native), KHONG phai `bcryptjs`: Phase 2 da go bcryptjs di vi trung
-// chuc nang. Hash cua hai package cung dinh dang $2b$ nen doi qua lai vo tu.
+// `bcrypt` (native), KHONG phai `bcryptjs`: Phase 2 da go bcryptjs di vi trung chuc
+// nang. Hash cua hai package cung dinh dang $2b$ nen doi qua lai vo tu.
 import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -58,14 +40,9 @@ import { Decimal } from '@prisma/client/runtime/library';
 // chan ly thu hai, doi ben nay quen ben kia la name_normalized sai am tham.
 import { normalizeText } from '../src/shared/slugify';
 
-// ─── Prisma enum — chỉ dùng string literal, tránh import enum bị lỗi ──────────
-//
-// LÝ DO không import { Role, OrderStatus, ... } từ @prisma/client:
-//   Prisma chỉ export enum SAU KHI đã chạy "prisma generate".
-//   Nếu schema chưa generate hoặc chưa có enum → import lỗi ngay lúc biên dịch.
-//   Giải pháp: dùng string literal khớp với giá trị enum trong schema.
-//   TypeScript vẫn kiểm tra type vì Prisma tự sinh union type cho từng field.
-//
+// String literal thay vì import enum từ @prisma/client: Prisma chỉ export enum SAU
+// KHI chạy `prisma generate`, chưa generate là lỗi ngay lúc biên dịch. TypeScript
+// vẫn kiểm tra vì Prisma tự sinh union type cho từng field.
 type Role           = 'CUSTOMER' | 'ADMIN';
 type OrderStatus    = 'PENDING' | 'PAID' | 'SHIPPED' | 'COMPLETED' | 'CANCELLED';
 type PaymentStatus  = 'COMPLETED' | 'FAILED' | 'REFUNDED';
@@ -106,9 +83,7 @@ function calcTotal(items: Array<{ unitPrice: Decimal; quantity: number }>): Deci
 // CONSTANTS
 // ─────────────────────────────────────────────
 
-// Đặt SEED_PASSWORD khi seed cho một bản demo mở ra Internet (Codespaces —
-// xem .devcontainer/setup.sh). Mặc định giữ nguyên như cũ để lệnh seed ở máy
-// dev và mọi ghi chú cũ không đổi.
+// Đặt SEED_PASSWORD khi seed cho bản demo mở ra Internet (xem .devcontainer/setup.sh).
 const DEFAULT_PASSWORD = process.env.SEED_PASSWORD ?? 'Webpx@2024';
 const PLACEHOLDER_BASE = 'https://picsum.photos/seed';
 
@@ -219,14 +194,10 @@ async function main(): Promise<void> {
   // ═══════════════════════════════════════════
   //
   // Token cố định để test thủ công verify email mà không cần Mailtrap.
-  // LƯU Ý: prisma.emailToken chỉ hoạt động nếu schema có model EmailToken.
-  //   Nếu chưa có model này, xóa block bên dưới đi, seed vẫn chạy bình thường.
 
   const verifyTokenPlain = 'SEED_VERIFY_HANH_2024';
   const verifyTokenHash  = deterministicHash(verifyTokenPlain);
 
-  // Kiểm tra model EmailToken có tồn tại không trước khi gọi
-  // (tránh crash khi schema chưa có model này)
   const hasEmailTokenModel = 'emailToken' in prisma;
 
   if (hasEmailTokenModel) {
@@ -555,6 +526,11 @@ async function main(): Promise<void> {
   };
 
   type OrderSeed = {
+    // Danh tinh CO DINH, dat tay, khong bao gio doi — nguon cua idempotency key.
+    // Dung bam tu `createdAt` (moc lay tu `new Date()` nen doi moi lan chay → key
+    // doi → seed lai la nhan doi don: da hong that, 17 → 31 → 45) va cung dung dung
+    // chi so mang (chen mot don vao giua la doi key hang loat).
+    key:            string;
     userEmail:      string;
     status:         OrderStatus;
     items:          OrderItemSeed[];
@@ -567,7 +543,7 @@ async function main(): Promise<void> {
   const orderSeeds: OrderSeed[] = [
     // ── Tuần này ─────────────────────────────────────────────────────
     {
-      userEmail: 'cong@webpx.vn', status: 'PAID', createdAt: daysAgo(1, 3),
+      key: 'cong-d1', userEmail: 'cong@webpx.vn', status: 'PAID', createdAt: daysAgo(1, 3),
       shippingAddress: 'Số 5 ngõ 12 Thái Hà, Đống Đa, Hà Nội',
       items: [
         { productSlug: 'den-cay-goc-phong-e27',       productName: 'Đèn cây góc phòng E27 ánh vàng',       unitPrice: 690_000, quantity: 1 },
@@ -576,7 +552,7 @@ async function main(): Promise<void> {
       paymentStatus: 'COMPLETED', providerTxnId: fakeTxnId(),
     },
     {
-      userEmail: 'lan.nguyen@gmail.com', status: 'PENDING', createdAt: daysAgo(0, 2),
+      key: 'lan-d0', userEmail: 'lan.nguyen@gmail.com', status: 'PENDING', createdAt: daysAgo(0, 2),
       shippingAddress: '12 Lê Lợi, Quận 1, TP.HCM',
       items: [
         { productSlug: 'binh-giu-nhiet-500ml', productName: 'Bình giữ nhiệt 500ml cổ hẹp', unitPrice: 199_000, quantity: 2 },
@@ -584,7 +560,7 @@ async function main(): Promise<void> {
       // PENDING: không có payment
     },
     {
-      userEmail: 'duc.tran@gmail.com', status: 'CANCELLED', createdAt: daysAgo(2, 5),
+      key: 'duc-d2', userEmail: 'duc.tran@gmail.com', status: 'CANCELLED', createdAt: daysAgo(2, 5),
       shippingAddress: '89 Nguyễn Huệ, Hải Châu, Đà Nẵng',
       items: [
         { productSlug: 'den-ban-hoc-chong-can', productName: 'Đèn bàn học chống cận 5 màu sáng', unitPrice: 259_000, quantity: 1 },
@@ -594,7 +570,7 @@ async function main(): Promise<void> {
     },
     // ── Tuần trước ──────────────────────────────────────────────────
     {
-      userEmail: 'cong@webpx.vn', status: 'SHIPPED', createdAt: daysAgo(5),
+      key: 'cong-d5', userEmail: 'cong@webpx.vn', status: 'SHIPPED', createdAt: daysAgo(5),
       shippingAddress: 'Số 5 ngõ 12 Thái Hà, Đống Đa, Hà Nội',
       items: [
         { productSlug: 'ke-sach-5-tang-160cm',     productName: 'Kệ sách 5 tầng lắp ghép 160cm',   unitPrice: 749_000, quantity: 1 },
@@ -603,7 +579,7 @@ async function main(): Promise<void> {
       paymentStatus: 'COMPLETED', providerTxnId: fakeTxnId(),
     },
     {
-      userEmail: 'lan.nguyen@gmail.com', status: 'COMPLETED', createdAt: daysAgo(7),
+      key: 'lan-d7', userEmail: 'lan.nguyen@gmail.com', status: 'COMPLETED', createdAt: daysAgo(7),
       shippingAddress: '12 Lê Lợi, Quận 1, TP.HCM',
       items: [
         { productSlug: 'chau-xi-mang-toi-gian-15cm',   productName: 'Chậu xi măng tối giản Ø15cm',        unitPrice: 99_000,  quantity: 3 },
@@ -612,7 +588,7 @@ async function main(): Promise<void> {
       paymentStatus: 'COMPLETED', providerTxnId: fakeTxnId(),
     },
     {
-      userEmail: 'duc.tran@gmail.com', status: 'COMPLETED', createdAt: daysAgo(9),
+      key: 'duc-d9', userEmail: 'duc.tran@gmail.com', status: 'COMPLETED', createdAt: daysAgo(9),
       shippingAddress: '89 Nguyễn Huệ, Hải Châu, Đà Nẵng',
       items: [
         { productSlug: 'den-ngu-cam-ung-cham', productName: 'Đèn ngủ cảm ứng chạm 3 mức sáng', unitPrice: 149_000, quantity: 2 },
@@ -622,7 +598,7 @@ async function main(): Promise<void> {
     },
     // ── 2 tuần trước ────────────────────────────────────────────────
     {
-      userEmail: 'cong@webpx.vn', status: 'COMPLETED', createdAt: daysAgo(12),
+      key: 'cong-d12', userEmail: 'cong@webpx.vn', status: 'COMPLETED', createdAt: daysAgo(12),
       shippingAddress: 'Số 5 ngõ 12 Thái Hà, Đống Đa, Hà Nội',
       items: [
         { productSlug: 'bo-dao-thot-go-tre-5-mon', productName: 'Bộ dao thớt gỗ tre 5 món',              unitPrice: 289_000, quantity: 1 },
@@ -631,7 +607,7 @@ async function main(): Promise<void> {
       paymentStatus: 'COMPLETED', providerTxnId: fakeTxnId(),
     },
     {
-      userEmail: 'lan.nguyen@gmail.com', status: 'COMPLETED', createdAt: daysAgo(14),
+      key: 'lan-d14', userEmail: 'lan.nguyen@gmail.com', status: 'COMPLETED', createdAt: daysAgo(14),
       shippingAddress: '12 Lê Lợi, Quận 1, TP.HCM',
       items: [
         { productSlug: 'tranh-canvas-phong-canh-nui', productName: 'Tranh canvas phong cảnh núi bộ 3 tấm', unitPrice: 449_000, quantity: 1 },
@@ -640,7 +616,7 @@ async function main(): Promise<void> {
       paymentStatus: 'COMPLETED', providerTxnId: fakeTxnId(),
     },
     {
-      userEmail: 'duc.tran@gmail.com', status: 'CANCELLED', createdAt: daysAgo(15),
+      key: 'duc-d15', userEmail: 'duc.tran@gmail.com', status: 'CANCELLED', createdAt: daysAgo(15),
       shippingAddress: '89 Nguyễn Huệ, Hải Châu, Đà Nẵng',
       items: [
         { productSlug: 'sofa-don-vai-linen-go-soi', productName: 'Sofa đơn vải linen khung gỗ sồi', unitPrice: 2_890_000, quantity: 1 },
@@ -649,7 +625,7 @@ async function main(): Promise<void> {
     },
     // ── 3–4 tuần trước (line chart doanh thu rải đều) ───────────────
     {
-      userEmail: 'cong@webpx.vn', status: 'COMPLETED', createdAt: daysAgo(18),
+      key: 'cong-d18', userEmail: 'cong@webpx.vn', status: 'COMPLETED', createdAt: daysAgo(18),
       shippingAddress: 'Số 5 ngõ 12 Thái Hà, Đống Đa, Hà Nội',
       items: [
         { productSlug: 'khuech-tan-tinh-dau-sieu-am',    productName: 'Khuếch tán tinh dầu siêu âm 200ml',    unitPrice: 320_000, quantity: 1 },
@@ -658,7 +634,7 @@ async function main(): Promise<void> {
       paymentStatus: 'COMPLETED', providerTxnId: fakeTxnId(),
     },
     {
-      userEmail: 'lan.nguyen@gmail.com', status: 'COMPLETED', createdAt: daysAgo(21),
+      key: 'lan-d21', userEmail: 'lan.nguyen@gmail.com', status: 'COMPLETED', createdAt: daysAgo(21),
       shippingAddress: '12 Lê Lợi, Quận 1, TP.HCM',
       items: [
         { productSlug: 'bo-6-bat-su-minh-long', productName: 'Bộ 6 bát sứ Minh Long họa tiết tre', unitPrice: 349_000, quantity: 1 },
@@ -667,7 +643,7 @@ async function main(): Promise<void> {
       paymentStatus: 'COMPLETED', providerTxnId: fakeTxnId(),
     },
     {
-      userEmail: 'duc.tran@gmail.com', status: 'COMPLETED', createdAt: daysAgo(24),
+      key: 'duc-d24', userEmail: 'duc.tran@gmail.com', status: 'COMPLETED', createdAt: daysAgo(24),
       shippingAddress: '89 Nguyễn Huệ, Hải Châu, Đà Nẵng',
       items: [
         { productSlug: 'den-tha-tran-may-tre-dan', productName: 'Đèn thả trần mây tre đan thủ công', unitPrice: 420_000, quantity: 2 },
@@ -675,7 +651,7 @@ async function main(): Promise<void> {
       paymentStatus: 'COMPLETED', providerTxnId: fakeTxnId(),
     },
     {
-      userEmail: 'cong@webpx.vn', status: 'COMPLETED', createdAt: daysAgo(27),
+      key: 'cong-d27', userEmail: 'cong@webpx.vn', status: 'COMPLETED', createdAt: daysAgo(27),
       shippingAddress: 'Số 5 ngõ 12 Thái Hà, Đống Đa, Hà Nội',
       items: [
         { productSlug: 'bo-3-chau-su-men-trang',          productName: 'Bộ 3 chậu sứ men trắng lệch kích thước', unitPrice: 245_000, quantity: 2 },
@@ -684,7 +660,7 @@ async function main(): Promise<void> {
       paymentStatus: 'COMPLETED', providerTxnId: fakeTxnId(),
     },
     {
-      userEmail: 'lan.nguyen@gmail.com', status: 'COMPLETED', createdAt: daysAgo(29),
+      key: 'lan-d29', userEmail: 'lan.nguyen@gmail.com', status: 'COMPLETED', createdAt: daysAgo(29),
       shippingAddress: '12 Lê Lợi, Quận 1, TP.HCM',
       items: [
         { productSlug: 'rem-vai-day-cach-nhiet',   productName: 'Rèm vải dày cách nhiệt 2 tấm 140×260cm', unitPrice: 680_000, quantity: 1 },
@@ -706,8 +682,8 @@ async function main(): Promise<void> {
     const userId = userMap[o.userEmail];
     if (!userId) throw new Error(`User không tìm thấy: ${o.userEmail}`);
 
-    // Idempotency key cố định → chạy lại seed không tạo trùng đơn
-    const idempotencyKey = deterministicHash(`seed-order-${o.userEmail}-${o.createdAt.getTime()}`);
+    // Bam tu `o.key` chu TUYET DOI khong tu `o.createdAt` — xem chu thich o `key`.
+    const idempotencyKey = deterministicHash(`seed-order-${o.key}`);
 
     const exists = await prisma.order.findFirst({ where: { idempotencyKey } });
     if (exists) continue;
@@ -828,7 +804,9 @@ async function main(): Promise<void> {
   console.log(`   Orders:     ${oCount}`);
   console.log(`   Payments:   ${payCount}\n`);
 
-  console.log('🔑 Tài khoản demo (password: Webpx@2024):');
+  // In DEFAULT_PASSWORD chu khong hardcode: ban demo cong khai dat SEED_PASSWORD
+  // khac di, dong log hardcode se noi sai mat khau ngay tren man hinh huong dan.
+  console.log(`🔑 Tài khoản demo (password: ${DEFAULT_PASSWORD}):`);
   console.log('   admin@shoplite.dev           → ADMIN');
   console.log('   cong@webpx.vn                → CUSTOMER (verified, có cart + lịch sử đơn)');
   console.log('   lan.nguyen@gmail.com          → CUSTOMER (verified)');

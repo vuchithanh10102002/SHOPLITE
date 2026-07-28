@@ -3,10 +3,9 @@ import { prisma } from "../lib/prisma";
 import { redisConnection } from "../lib/redis";
 
 /**
- * CHOT AN TOAN. beforeEach duoi day xoa sach moi bang. Neu vi mot ly do nao do
- * process nay tro vao DB dev (thieu .env.test, vitest.config sai...) thi no se
- * xoa sach du lieu seed cua anh ma khong bao mot cau.
- * Tha fail ca suite con hon mat DB.
+ * CHOT AN TOAN: beforeEach duoi day xoa sach moi bang, nen neu process tro nham vao
+ * DB dev (thieu .env.test, vitest.config sai...) thi mat sach du lieu ma khong bao
+ * mot cau. Tha fail ca suite con hon mat DB.
  */
 const dbUrl = process.env.DATABASE_URL ?? "";
 
@@ -30,13 +29,9 @@ vi.mock("../lib/queue", () => ({
 }));
 
 /**
- * Mock Cloudinary: .env.test co CLOUDINARY_URL=dummy, khong goi mang that duoc,
- * va cung khong nen (Handbook 5.7: mock Cloudinary, KHONG mock DB).
- *
- * upload_stream that tra ve mot Writable; service bom buffer vao roi doi
- * callback. Mock giu dung hop dong do: tra Writable, khi buffer het (final) thi
- * goi callback voi secure_url/public_id gia. Test doc lai hai mock fn nay qua
- * `import { cloudinary }` de assert da/ chua duoc goi.
+ * Mock Cloudinary (Handbook 5.7: mock Cloudinary, KHONG mock DB). Giu dung hop dong
+ * cua upload_stream that: tra ve Writable, het buffer (final) thi goi callback voi
+ * secure_url/public_id gia. Test assert da/chua goi qua `import { cloudinary }`.
  */
 vi.mock("../lib/cloudinary", async () => {
   const { Writable } = await import("node:stream");
@@ -64,12 +59,10 @@ vi.mock("../lib/cloudinary", async () => {
 });
 
 /**
- * Mock CONG thanh toan (khong mock settlePayment — do la logic that can test).
- * Mac dinh: charge THANH CONG + TUC THI (bo sleep 200-800ms + bo random cua
- * PAYMENT_FAIL_RATE) → moi don trong test ket PAID xac dinh. Test duong that bai
- * override bang `(paymentProvider.charge as Mock).mockRejectedValueOnce(new
- * PaymentDeclinedError())`. Giu nguyen export con lai (PaymentDeclinedError that)
- * de instanceof trong settlePayment van dung.
+ * Mock CONG thanh toan, KHONG mock settlePayment (do la logic that can test). Mac
+ * dinh charge thanh cong + tuc thi (bo sleep + bo random) → don trong test ket PAID
+ * xac dinh; duong that bai override bang `mockRejectedValueOnce`. Giu nguyen export
+ * con lai de `instanceof PaymentDeclinedError` trong settlePayment van dung.
  */
 vi.mock("../modules/payments/payment.provider", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../modules/payments/payment.provider")>();
@@ -92,9 +85,8 @@ beforeEach(async () => {
   await prisma.cartItem.deleteMany();
   await prisma.cart.deleteMany();
 
-  // Product/Category: phai xoa SAU orderItem + cartItem (hai bang do tro toi
-  // product), va con truoc cha — image → product → category, category con truoc
-  // category cha (self-relation CategoryTree khong cascade).
+  // SAU orderItem + cartItem (hai bang do tro toi product), va con truoc cha: image
+  // → product → category, category con truoc category cha (self-relation khong cascade).
   await prisma.productImage.deleteMany();
   await prisma.product.deleteMany();
   await prisma.category.deleteMany({ where: { parentId: { not: null } } });
@@ -102,11 +94,11 @@ beforeEach(async () => {
 
   await prisma.user.deleteMany();
 
-  // Xoa counter rate limit — khong co dong nay, test thu 3 se an 429 vi
-  // counter cua test 1 va 2 van con song trong cua so 60s.
+  // Xoa counter rate limit: khong co dong nay thi test thu 3 an 429 vi counter cua
+  // test 1 va 2 van con song trong cua so 60s.
   await redisConnection.flushdb();
 
-  // Reset mock.calls cua emailQueue.add giua cac test.
+  // Xoa mock.calls nhung GIU implementation (khong phai resetAllMocks).
   vi.clearAllMocks();
 });
 

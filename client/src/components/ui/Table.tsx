@@ -2,23 +2,17 @@ import type { ReactNode, ThHTMLAttributes, TdHTMLAttributes } from "react";
 import { cn } from "@/lib/cn";
 
 /**
- * Bang tu viet (Roadmap 6.1 buoc 2: "khong can TanStack Table cho <= 10 cot").
- * Day KHONG phai mot data-grid: khong sort, khong resize, khong virtual scroll —
- * chi la vo dung chung de bon man admin trong nhu nhau, con cot va dong thi moi
- * man tu viet bang JSX that.
+ * Bang tu viet (Roadmap 6.1: "khong can TanStack Table cho <= 10 cot"). KHONG phai
+ * data-grid — khong sort/resize/virtual scroll, chi la vo dung chung.
  *
- * Cai duy nhat dang goi la "logic" o day la khung cuon ngang: bang admin co 6-7
- * cot, tren dien thoai no PHAI cuon trong khung cua no. Neu khong, ca trang bi
- * keo rong ra va moi trang khac trong app cung lech theo.
+ * Thu duy nhat dang goi la logic o day: khung cuon ngang. Bang admin 6-7 cot phai
+ * cuon TRONG khung cua no, khong thi ca trang bi keo rong va moi trang khac lech theo.
  *
- * `compact` tat san min-width do: bang 2-3 cot nam trong mot the hep (bang trang
- * thai o dashboard) khong can san 42rem, ep vao thi no cuon ngang ngay tren man
- * hinh rong va cot so bi cat mat.
- *
- * Phai la MOT PROP chu khong phai truyen `className="min-w-0"`: `cn()` chi noi
- * chuoi (xem lib/cn.ts — co y khong dung tailwind-merge), nen hai class min-width
- * cung ton tai va cai thang la cai xep sau trong file CSS, khong phai cai truyen
- * vao. Override kieu do im lang khong an thua.
+ * `compact` tat san min-width do (bang 2-3 cot trong the hep khong can 42rem, ep vao
+ * thi cuon ngang ngay tren man hinh rong). Phai la MOT PROP chu khong phai truyen
+ * `className="min-w-0"`: `cn()` chi noi chuoi (lib/cn.ts co y khong dung
+ * tailwind-merge) nen hai class min-width cung ton tai, va cai thang la cai xep sau
+ * trong file CSS — override kieu do im lang khong an thua.
  */
 export function Table({
   children,

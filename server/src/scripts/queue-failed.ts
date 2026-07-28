@@ -4,8 +4,8 @@
  *   npm run queue:failed          # liet ke
  *   npm run queue:failed -- retry # day tat ca ve lai queue de thu lai
  *
- * Day la ban thu cong cua Bull Board. Muc dich khong phai tien nghi, ma la de
- * thay ro: job fail KHONG bien mat — no nam lai cho nguoi that quyet dinh xu ly.
+ * Ban thu cong cua Bull Board: job fail KHONG bien mat, no nam lai cho nguoi that
+ * quyet dinh xu ly.
  */
 import { emailQueue } from "../lib/queue";
 import { redisConnection } from "../lib/redis";

@@ -2,19 +2,14 @@ import { OrderStatus } from "@prisma/client";
 import { Errors } from "../../shared/errors";
 
 /**
- * State machine don hang — code hoa BR1 (Handbook 6.5). Chi 5 chuyen hop le,
- * moi chuyen khac → 409 INVALID_STATUS_TRANSITION. Day la NGUON CHAN LY DUY NHAT
- * cho moi cho doi trang thai o cac buoc sau:
- *   b5 finalize payment (PENDING→PAID | PENDING→CANCELLED)
- *   b6 huy don (PENDING/PAID→CANCELLED) + admin doi trang thai (PAID→SHIPPED,
- *      SHIPPED→COMPLETED...)
- * Don moi luon vao PENDING (default o DB), khong nam trong bang nay vi khong
- * phai "chuyen" tu trang thai nao.
+ * State machine don hang — code hoa BR1 (Handbook 6.5). Dung 5 chuyen hop le, moi
+ * chuyen khac → 409 INVALID_STATUS_TRANSITION. NGUON CHAN LY DUY NHAT cho finalize
+ * payment, huy don va admin doi trang thai.
  *
- * COMPLETED/CANCELLED la trang thai cuoi (mang rong) → khong di dau duoc nua.
+ * Don moi luon vao PENDING (default o DB) nen khong nam trong bang — no khong phai
+ * "chuyen" tu trang thai nao. COMPLETED/CANCELLED la trang thai cuoi (mang rong).
  *
- * TODO(FE): khi lam client, tach TRANSITIONS sang shared de dropdown admin import
- * chung, chi hien option hop le (Roadmap muc FE) — khong nhay coc duoc tu UI.
+ * FE khong giu ban sao bang nay: order.service tra `allowedTransitions` qua API.
  */
 export const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PENDING]: [OrderStatus.PAID, OrderStatus.CANCELLED],

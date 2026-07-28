@@ -12,9 +12,8 @@ const emailWorker = createEmailWorker();
 
 const orderMaintenanceWorker = createOrderMaintenanceWorker();
 
-// Nhip tim cho HEALTHCHECK cua container. Worker khong mo port nao nen day la
-// duong duy nhat de ben ngoai biet no con song — chi tiet trong
-// lib/worker-heartbeat.ts.
+// Nhip tim cho HEALTHCHECK cua container — worker khong mo port nao nen day la
+// duong duy nhat de ben ngoai biet no con song (lib/worker-heartbeat.ts).
 const stopHeartbeat = startHeartbeat(redisConnection);
 
 // Dang ky lich quet don PENDING treo (idempotent — restart khong tao lich trung).
@@ -25,13 +24,9 @@ void scheduleStaleOrderSweep()
 logger.info("Email worker + order-maintenance worker started");
 
 /**
- * Graceful shutdown — quan trong o worker hon ca o API.
- *
- * `worker.close()` doi job DANG chay xu ly xong roi moi dong. Neu process.exit()
- * ngay, job dang gui bi bo giua chung: BullMQ khong nhan duoc ket qua nen sau
- * `lockDuration` se coi la stalled va giao lai cho worker khac → email gui 2 lan.
- *
- * Cham 1 giay luc deploy, doi lai khong gui trung. Dang gia.
+ * Graceful shutdown — quan trong o worker hon ca o API. `worker.close()` doi job
+ * DANG chay xong roi moi dong; process.exit() ngay thi job dang gui bi bo giua
+ * chung, BullMQ coi la stalled sau `lockDuration` va giao lai → email gui 2 lan.
  */
 async function shutdown(signal: string) {
   logger.info({ signal }, "Worker shutting down...");
