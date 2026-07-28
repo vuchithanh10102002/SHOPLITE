@@ -8,16 +8,6 @@ import { Button, buttonClass } from "@/components/ui/Button";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/States";
 import { toast } from "@/lib/toast";
 import { formatDateTime, formatVnd } from "@/lib/format";
-import type { OrderStatus } from "@/api/types";
-
-/**
- * BR2: chi don CHUA giao moi huy duoc. Mang nay phai khop TRANSITIONS ben backend —
- * hien nut o trang thai khac thi nguoi dung bam roi an 409, loi tu gay ra.
- *
- * Day la ban sao DUY NHAT cua state machine con sot lai o FE: order detail da tra san
- * `allowedTransitions`, doc `CANCELLED` trong do thi bo han duoc mang nay.
- */
-const CANCELLABLE: OrderStatus[] = ["PENDING", "PAID"];
 
 const PAYMENT_LABEL: Record<string, string> = {
   PENDING: "Chờ xử lý",
@@ -60,7 +50,10 @@ export function OrderDetailPage() {
   }
 
   const data = order.data;
-  const canCancel = CANCELLABLE.includes(data.status);
+  // BR2 (chi don CHUA giao moi huy duoc) do BACKEND quyet dinh: `allowedTransitions`
+  // sinh tu TRANSITIONS trong order.state.ts. FE khong giu ban sao nao cua state
+  // machine, nen khong the lech voi server va an 409 tu gay ra.
+  const canCancel = data.allowedTransitions.includes("CANCELLED");
 
   function handleCancel() {
     cancelOrder.mutate(id, {
